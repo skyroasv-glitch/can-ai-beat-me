@@ -390,6 +390,12 @@ function LineupBuilderPage() {
               Add {5 - myLineup.length} more {5 - myLineup.length === 1 ? "player" : "players"} to enable
             </p>
           )}
+          {aiError && (
+            <div className="mt-3 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <p>{aiError}</p>
+            </div>
+          )}
         </div>
       </main>
     </div>
