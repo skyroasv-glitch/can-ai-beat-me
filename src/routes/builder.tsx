@@ -1,6 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useState, useMemo, useRef, useEffect } from "react";
-import { ArrowLeft, Zap, X, Bot, User, Sparkles, Search, ChevronDown } from "lucide-react";
+import { ArrowLeft, Zap, X, Bot, User, Sparkles, Search, ChevronDown, AlertCircle } from "lucide-react";
+import { generateAILineup } from "@/lib/ai-lineup.functions";
+
+interface AIPlayer {
+  name: string;
+  position: string;
+  reasoning: string;
+}
 
 export const Route = createFileRoute("/builder")({
   head: () => ({
