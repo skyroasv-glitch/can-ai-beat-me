@@ -344,18 +344,21 @@ function LineupBuilderPage() {
                 }
                 return (
                   <div
-                    key={player.id}
-                    className="flex items-center gap-3 rounded-xl border border-cyan/20 bg-background px-4 py-3"
+                    key={`${player.name}-${i}`}
+                    className="rounded-xl border border-cyan/20 bg-background px-4 py-3"
                   >
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan/10 text-xs font-bold text-cyan">
-                      {i + 1}
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{player.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {player.position} · {player.team}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan/10 text-xs font-bold text-cyan">
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{player.name}</p>
+                        <p className="text-xs text-muted-foreground">{player.position}</p>
+                      </div>
                     </div>
+                    <p className="mt-2 pl-10 text-xs leading-relaxed text-muted-foreground">
+                      {player.reasoning}
+                    </p>
                   </div>
                 );
               })}
@@ -366,7 +369,7 @@ function LineupBuilderPage() {
         {/* Generate AI Lineup */}
         <div className="mt-8">
           <button
-            onClick={generateAILineup}
+            onClick={() => { void generateAI(); }}
             disabled={myLineup.length < 5 || generating}
             className="w-full rounded-xl bg-cyan py-4 text-base font-bold text-primary-foreground transition-all duration-200 hover:brightness-110 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed"
           >
