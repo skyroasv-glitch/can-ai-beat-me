@@ -1,6 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useState, useMemo, useRef, useEffect } from "react";
-import { ArrowLeft, Zap, X, Bot, User, Sparkles, Search, ChevronDown } from "lucide-react";
+import { ArrowLeft, Zap, X, Bot, User, Sparkles, Search, ChevronDown, AlertCircle } from "lucide-react";
+import { generateAILineup } from "@/lib/ai-lineup.functions";
+
+interface AIPlayer {
+  name: string;
+  position: string;
+  reasoning: string;
+}
 
 export const Route = createFileRoute("/builder")({
   head: () => ({
@@ -71,11 +79,13 @@ const PLAYERS: Player[] = [
 function LineupBuilderPage() {
   const [matchupId, setMatchupId] = useState<string>(MATCHUPS[0].id);
   const [myLineup, setMyLineup] = useState<Player[]>([]);
-  const [aiLineup, setAiLineup] = useState<Player[] | null>(null);
+  const [aiLineup, setAiLineup] = useState<AIPlayer[] | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const callGenerate = useServerFn(generateAILineup);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -114,18 +124,27 @@ function LineupBuilderPage() {
   const removePlayer = (id: string) => {
     setMyLineup((prev) => prev.filter((p) => p.id !== id));
     setAiLineup(null);
+    setAiError(null);
   };
 
-  const generateAILineup = () => {
+  const generateAI = async () => {
     if (myLineup.length < 5) return;
     setGenerating(true);
     setAiLineup(null);
-    setTimeout(() => {
-      const pool = PLAYERS.filter((p) => !myLineup.find((m) => m.id === p.id));
-      const shuffled = [...pool].sort(() => 0.5 - Math.random());
-      setAiLineup(shuffled.slice(0, 5));
+    setAiError(null);
+    try {
+      const result = await callGenerate({
+        data: {
+          matchup: `${matchup.away} @ ${matchup.home}`,
+          players: myLineup.map((p) => ({ name: p.name, position: p.position, team: p.team })),
+        },
+      });
+      setAiLineup(result.players);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Failed to generate AI lineup");
+    } finally {
       setGenerating(false);
-    }, 1200);
+    }
   };
 
   return (
@@ -325,18 +344,21 @@ function LineupBuilderPage() {
                 }
                 return (
                   <div
-                    key={player.id}
-                    className="flex items-center gap-3 rounded-xl border border-cyan/20 bg-background px-4 py-3"
+                    key={`${player.name}-${i}`}
+                    className="rounded-xl border border-cyan/20 bg-background px-4 py-3"
                   >
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan/10 text-xs font-bold text-cyan">
-                      {i + 1}
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{player.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {player.position} · {player.team}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan/10 text-xs font-bold text-cyan">
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{player.name}</p>
+                        <p className="text-xs text-muted-foreground">{player.position}</p>
+                      </div>
                     </div>
+                    <p className="mt-2 pl-10 text-xs leading-relaxed text-muted-foreground">
+                      {player.reasoning}
+                    </p>
                   </div>
                 );
               })}
@@ -347,7 +369,7 @@ function LineupBuilderPage() {
         {/* Generate AI Lineup */}
         <div className="mt-8">
           <button
-            onClick={generateAILineup}
+            onClick={() => { void generateAI(); }}
             disabled={myLineup.length < 5 || generating}
             className="w-full rounded-xl bg-cyan py-4 text-base font-bold text-primary-foreground transition-all duration-200 hover:brightness-110 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -367,6 +389,12 @@ function LineupBuilderPage() {
             <p className="mt-2 text-center text-xs text-muted-foreground">
               Add {5 - myLineup.length} more {5 - myLineup.length === 1 ? "player" : "players"} to enable
             </p>
+          )}
+          {aiError && (
+            <div className="mt-3 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <p>{aiError}</p>
+            </div>
           )}
         </div>
       </main>
