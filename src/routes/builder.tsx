@@ -1,14 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { ArrowLeft, Zap, Plus, X, Bot, User, Swords, Trash2 } from "lucide-react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { ArrowLeft, Zap, X, Bot, User, Sparkles, Search, ChevronDown } from "lucide-react";
 
 export const Route = createFileRoute("/builder")({
   head: () => ({
     meta: [
       { title: "Lineup Builder — CanAIBeatMe" },
-      { name: "description", content: "Build your NBA fantasy lineup and challenge the AI." },
+      { name: "description", content: "Pick an NBA matchup, build your lineup, and let AI build its own." },
       { property: "og:title", content: "Lineup Builder — CanAIBeatMe" },
-      { property: "og:description", content: "Build your NBA fantasy lineup and challenge the AI." },
+      { property: "og:description", content: "Pick an NBA matchup, build your lineup, and let AI build its own." },
     ],
   }),
   component: LineupBuilderPage,
@@ -21,74 +21,115 @@ interface Player {
   position: string;
 }
 
-const MOCK_PLAYERS: Player[] = [
+interface Matchup {
+  id: string;
+  away: string;
+  home: string;
+  tipoff: string;
+}
+
+const MATCHUPS: Matchup[] = [
+  { id: "lal-bos", away: "Los Angeles Lakers", home: "Boston Celtics", tipoff: "Tonight 7:30 PM ET" },
+  { id: "gsw-den", away: "Golden State Warriors", home: "Denver Nuggets", tipoff: "Tonight 10:00 PM ET" },
+  { id: "mil-phi", away: "Milwaukee Bucks", home: "Philadelphia 76ers", tipoff: "Tomorrow 7:00 PM ET" },
+  { id: "dal-okc", away: "Dallas Mavericks", home: "Oklahoma City Thunder", tipoff: "Tomorrow 8:00 PM ET" },
+];
+
+const PLAYERS: Player[] = [
   { id: "1", name: "LeBron James", team: "LAL", position: "SF" },
-  { id: "2", name: "Kevin Durant", team: "PHX", position: "SF" },
-  { id: "3", name: "Stephen Curry", team: "GSW", position: "PG" },
-  { id: "4", name: "Giannis Antetokounmpo", team: "MIL", position: "PF" },
-  { id: "5", name: "Jayson Tatum", team: "BOS", position: "SF" },
-  { id: "6", name: "Nikola Jokic", team: "DEN", position: "C" },
-  { id: "7", name: "Luka Doncic", team: "DAL", position: "PG" },
-  { id: "8", name: "Joel Embiid", team: "PHI", position: "C" },
-  { id: "9", name: "Shai Gilgeous-Alexander", team: "OKC", position: "SG" },
-  { id: "10", name: "Anthony Edwards", team: "MIN", position: "SG" },
-  { id: "11", name: "Tyrese Haliburton", team: "IND", position: "PG" },
-  { id: "12", name: "Donovan Mitchell", team: "CLE", position: "SG" },
-  { id: "13", name: "Devin Booker", team: "PHX", position: "SG" },
-  { id: "14", name: "Jimmy Butler", team: "MIA", position: "SF" },
-  { id: "15", name: "Kawhi Leonard", team: "LAC", position: "SF" },
+  { id: "2", name: "Anthony Davis", team: "LAL", position: "PF" },
+  { id: "3", name: "Jayson Tatum", team: "BOS", position: "SF" },
+  { id: "4", name: "Jaylen Brown", team: "BOS", position: "SG" },
+  { id: "5", name: "Stephen Curry", team: "GSW", position: "PG" },
+  { id: "6", name: "Draymond Green", team: "GSW", position: "PF" },
+  { id: "7", name: "Nikola Jokic", team: "DEN", position: "C" },
+  { id: "8", name: "Jamal Murray", team: "DEN", position: "PG" },
+  { id: "9", name: "Giannis Antetokounmpo", team: "MIL", position: "PF" },
+  { id: "10", name: "Damian Lillard", team: "MIL", position: "PG" },
+  { id: "11", name: "Joel Embiid", team: "PHI", position: "C" },
+  { id: "12", name: "Tyrese Maxey", team: "PHI", position: "PG" },
+  { id: "13", name: "Luka Doncic", team: "DAL", position: "PG" },
+  { id: "14", name: "Kyrie Irving", team: "DAL", position: "SG" },
+  { id: "15", name: "Shai Gilgeous-Alexander", team: "OKC", position: "SG" },
+  { id: "16", name: "Chet Holmgren", team: "OKC", position: "C" },
+  { id: "17", name: "Kevin Durant", team: "PHX", position: "SF" },
+  { id: "18", name: "Devin Booker", team: "PHX", position: "SG" },
+  { id: "19", name: "Anthony Edwards", team: "MIN", position: "SG" },
+  { id: "20", name: "Karl-Anthony Towns", team: "MIN", position: "C" },
+  { id: "21", name: "Tyrese Haliburton", team: "IND", position: "PG" },
+  { id: "22", name: "Donovan Mitchell", team: "CLE", position: "SG" },
+  { id: "23", name: "Jimmy Butler", team: "MIA", position: "SF" },
+  { id: "24", name: "Bam Adebayo", team: "MIA", position: "C" },
+  { id: "25", name: "Kawhi Leonard", team: "LAC", position: "SF" },
+  { id: "26", name: "Paul George", team: "LAC", position: "SF" },
+  { id: "27", name: "Trae Young", team: "ATL", position: "PG" },
+  { id: "28", name: "Ja Morant", team: "MEM", position: "PG" },
+  { id: "29", name: "Zion Williamson", team: "NOP", position: "PF" },
+  { id: "30", name: "Victor Wembanyama", team: "SAS", position: "C" },
 ];
 
 function LineupBuilderPage() {
+  const [matchupId, setMatchupId] = useState<string>(MATCHUPS[0].id);
   const [myLineup, setMyLineup] = useState<Player[]>([]);
   const [aiLineup, setAiLineup] = useState<Player[] | null>(null);
+  const [generating, setGenerating] = useState(false);
   const [search, setSearch] = useState("");
-  const [isBattling, setIsBattling] = useState(false);
-  const [battleComplete, setBattleComplete] = useState(false);
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const filteredPlayers = MOCK_PLAYERS.filter(
-    (p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.team.toLowerCase().includes(search.toLowerCase()) ||
-      p.position.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const matchup = MATCHUPS.find((m) => m.id === matchupId)!;
+
+  const available = useMemo(
+    () =>
+      PLAYERS.filter((p) => !myLineup.find((m) => m.id === p.id)).filter((p) => {
+        const q = search.toLowerCase().trim();
+        if (!q) return true;
+        return (
+          p.name.toLowerCase().includes(q) ||
+          p.team.toLowerCase().includes(q) ||
+          p.position.toLowerCase().includes(q)
+        );
+      }),
+    [myLineup, search]
   );
 
   const addPlayer = (player: Player) => {
     if (myLineup.length >= 5) return;
-    if (myLineup.find((p) => p.id === player.id)) return;
     setMyLineup((prev) => [...prev, player]);
+    setSearch("");
+    setOpen(false);
+    setAiLineup(null);
   };
 
   const removePlayer = (id: string) => {
     setMyLineup((prev) => prev.filter((p) => p.id !== id));
     setAiLineup(null);
-    setBattleComplete(false);
   };
 
-  const clearLineup = () => {
-    setMyLineup([]);
-    setAiLineup(null);
-    setBattleComplete(false);
-  };
-
-  const battleAI = () => {
+  const generateAILineup = () => {
     if (myLineup.length < 5) return;
-    setIsBattling(true);
+    setGenerating(true);
     setAiLineup(null);
-    setBattleComplete(false);
-    // Simulate AI building its lineup
     setTimeout(() => {
-      const shuffled = [...MOCK_PLAYERS].sort(() => 0.5 - Math.random());
-      const aiPicks = shuffled.slice(0, 5);
-      setAiLineup(aiPicks);
-      setIsBattling(false);
-      setBattleComplete(true);
-    }, 1500);
+      const pool = PLAYERS.filter((p) => !myLineup.find((m) => m.id === p.id));
+      const shuffled = [...pool].sort(() => 0.5 - Math.random());
+      setAiLineup(shuffled.slice(0, 5));
+      setGenerating(false);
+    }, 1200);
   };
 
   return (
     <div className="relative min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-4">
@@ -105,199 +146,228 @@ function LineupBuilderPage() {
               <span>CanAIBeatMe</span>
             </Link>
           </div>
-          <div className="text-sm text-muted-foreground">
-            NBA Lineup Builder
-          </div>
+          <div className="text-sm text-muted-foreground">NBA Lineup Builder</div>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8">
-        <div className="grid gap-8 lg:grid-cols-2">
-          {/* Left: Player Pool */}
-          <div>
-            <h2 className="mb-4 text-xl font-bold text-foreground">Available Players</h2>
-            <div className="mb-4">
-              <input
-                type="text"
-                placeholder="Search players, teams, positions..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-colors"
-              />
-            </div>
-            <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-              {filteredPlayers.map((player) => {
-                const isSelected = myLineup.find((p) => p.id === player.id);
-                const isFull = myLineup.length >= 5;
-                return (
-                  <div
-                    key={player.id}
-                    className={`flex items-center justify-between rounded-xl border px-4 py-3 transition-all ${
-                      isSelected
-                        ? "border-cyan/30 bg-cyan/5"
-                        : "border-border bg-surface hover:bg-surface-raised"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-xs font-bold text-muted-foreground">
-                        {player.position}
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{player.name}</p>
-                        <p className="text-xs text-muted-foreground">{player.team}</p>
-                      </div>
-                    </div>
-                    {isSelected ? (
-                      <span className="rounded-md bg-cyan/10 px-2 py-1 text-xs font-medium text-cyan">
-                        Added
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => addPlayer(player)}
-                        disabled={isFull}
-                        className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                          isFull
-                            ? "cursor-not-allowed bg-muted text-muted-foreground"
-                            : "bg-cyan/10 text-cyan hover:bg-cyan/20"
-                        }`}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right: My Lineup & Battle */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-foreground">Your Lineup</h2>
-              {myLineup.length > 0 && (
-                <button
-                  onClick={clearLineup}
-                  className="flex items-center gap-1.5 text-xs font-medium text-destructive hover:text-destructive/80 transition-colors"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Clear
-                </button>
-              )}
-            </div>
-
-            {/* Slot indicators */}
-            <div className="mb-4 flex items-center gap-2">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <div
-                  key={i}
-                  className={`h-1.5 flex-1 rounded-full transition-colors ${
-                    i < myLineup.length ? "bg-cyan" : "bg-muted"
-                  }`}
-                />
+        {/* Matchup selector */}
+        <section className="mb-8">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Select Matchup
+          </label>
+          <div className="relative">
+            <select
+              value={matchupId}
+              onChange={(e) => setMatchupId(e.target.value)}
+              className="w-full appearance-none rounded-xl border border-border bg-surface px-4 py-4 pr-12 text-base font-semibold text-foreground outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-colors cursor-pointer"
+            >
+              {MATCHUPS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.away} @ {m.home} — {m.tipoff}
+                </option>
               ))}
-              <span className="ml-2 text-xs font-medium text-muted-foreground">
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {matchup.away} @ {matchup.home} · {matchup.tipoff}
+          </p>
+        </section>
+
+        {/* Two-column lineups */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Your Lineup */}
+          <section className="rounded-2xl border border-border bg-surface p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <User className="h-5 w-5 text-cyan" />
+              <h2 className="text-lg font-bold text-foreground">Your Lineup</h2>
+              <span className="ml-auto rounded-md bg-cyan/10 px-2 py-0.5 text-xs font-bold text-cyan">
                 {myLineup.length}/5
               </span>
             </div>
 
-            {/* My lineup cards */}
-            <div className="space-y-2 mb-6">
-              {myLineup.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-10 text-center">
-                  <User className="mx-auto h-8 w-8 text-muted-foreground/40 mb-2" />
-                  <p className="text-sm text-muted-foreground">
-                    Select 5 players from the list to build your lineup
-                  </p>
+            {/* Search dropdown */}
+            <div ref={dropdownRef} className="relative mb-4">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder={myLineup.length >= 5 ? "Lineup full" : "Search players to add..."}
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setOpen(true);
+                  }}
+                  onFocus={() => setOpen(true)}
+                  disabled={myLineup.length >= 5}
+                  className="w-full rounded-xl border border-border bg-background pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </div>
+              {open && myLineup.length < 5 && (
+                <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-surface-raised shadow-2xl">
+                  {available.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-muted-foreground">No players found</div>
+                  ) : (
+                    available.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => addPlayer(p)}
+                        className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-cyan/10"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-xs font-bold text-muted-foreground">
+                            {p.position}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{p.name}</p>
+                            <p className="text-xs text-muted-foreground">{p.team}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs font-medium text-cyan">Add</span>
+                      </button>
+                    ))
+                  )}
                 </div>
-              ) : (
-                myLineup.map((player, index) => (
+              )}
+            </div>
+
+            {/* Player cards */}
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => {
+                const player = myLineup[i];
+                if (!player) {
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-background/40 px-4 py-3"
+                    >
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
+                        {i + 1}
+                      </span>
+                      <p className="text-sm text-muted-foreground">Empty slot</p>
+                    </div>
+                  );
+                }
+                return (
                   <div
                     key={player.id}
-                    className="flex items-center justify-between rounded-xl border border-cyan/20 bg-cyan/5 px-4 py-3"
+                    className="flex items-center justify-between rounded-xl border border-cyan/30 bg-cyan/5 px-4 py-3"
                   >
                     <div className="flex items-center gap-3">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan/10 text-xs font-bold text-cyan">
-                        {index + 1}
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan/15 text-xs font-bold text-cyan">
+                        {i + 1}
                       </span>
                       <div>
                         <p className="text-sm font-semibold text-foreground">{player.name}</p>
-                        <p className="text-xs text-muted-foreground">{player.position} — {player.team}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {player.position} · {player.team}
+                        </p>
                       </div>
                     </div>
                     <button
                       onClick={() => removePlayer(player.id)}
                       className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      aria-label={`Remove ${player.name}`}
                     >
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                ))
-              )}
+                );
+              })}
+            </div>
+          </section>
+
+          {/* AI Lineup */}
+          <section className="rounded-2xl border border-border bg-surface p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <Bot className="h-5 w-5 text-cyan" />
+              <h2 className="text-lg font-bold text-foreground">AI Lineup</h2>
+              <span className="ml-auto rounded-md bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">
+                {aiLineup ? "5/5" : "0/5"}
+              </span>
             </div>
 
-            {/* Battle Button */}
-            {myLineup.length === 5 && !battleComplete && (
-              <button
-                onClick={battleAI}
-                disabled={isBattling}
-                className="w-full rounded-xl bg-cyan py-4 text-base font-bold text-primary-foreground transition-all duration-200 hover:brightness-110 active:scale-[0.98] disabled:opacity-70"
-              >
-                {isBattling ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
-                    AI is building its lineup...
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    <Swords className="h-5 w-5" />
-                    Battle the AI
-                  </span>
-                )}
-              </button>
-            )}
+            <div className="mb-4 rounded-xl border border-border bg-background/40 px-4 py-3 text-xs text-muted-foreground">
+              {aiLineup
+                ? "The AI has built its lineup. Scroll to compare."
+                : "Build your lineup, then generate the AI's counter-lineup below."}
+            </div>
 
-            {/* AI Lineup Result */}
-            {battleComplete && aiLineup && (
-              <div className="mt-6 rounded-2xl border border-border bg-surface p-6">
-                <div className="mb-4 flex items-center gap-2">
-                  <Bot className="h-5 w-5 text-cyan" />
-                  <h3 className="text-lg font-bold text-foreground">AI's Lineup</h3>
-                </div>
-                <div className="space-y-2">
-                  {aiLineup.map((player, index) => (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => {
+                const player = aiLineup?.[i];
+                if (generating) {
+                  return (
                     <div
-                      key={player.id}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-background px-4 py-3"
+                      key={i}
+                      className="flex items-center gap-3 rounded-xl border border-border bg-background/40 px-4 py-3 animate-pulse"
                     >
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
-                        {index + 1}
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
+                        {i + 1}
                       </span>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{player.name}</p>
-                        <p className="text-xs text-muted-foreground">{player.position} — {player.team}</p>
-                      </div>
+                      <div className="h-3 w-32 rounded bg-muted" />
                     </div>
-                  ))}
-                </div>
-                <div className="mt-4 rounded-xl bg-cyan/5 border border-cyan/20 p-4 text-center">
-                  <p className="text-sm text-cyan font-semibold">Battle Complete!</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Scoring comparison coming in a future update.
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    setAiLineup(null);
-                    setBattleComplete(false);
-                    setMyLineup([]);
-                  }}
-                  className="mt-4 w-full rounded-xl border border-border bg-surface-raised py-3 text-sm font-semibold text-foreground transition-colors hover:bg-surface"
-                >
-                  Build a New Lineup
-                </button>
-              </div>
+                  );
+                }
+                if (!player) {
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-background/40 px-4 py-3"
+                    >
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
+                        {i + 1}
+                      </span>
+                      <p className="text-sm text-muted-foreground">Awaiting AI</p>
+                    </div>
+                  );
+                }
+                return (
+                  <div
+                    key={player.id}
+                    className="flex items-center gap-3 rounded-xl border border-cyan/20 bg-background px-4 py-3"
+                  >
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan/10 text-xs font-bold text-cyan">
+                      {i + 1}
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{player.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {player.position} · {player.team}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+
+        {/* Generate AI Lineup */}
+        <div className="mt-8">
+          <button
+            onClick={generateAILineup}
+            disabled={myLineup.length < 5 || generating}
+            className="w-full rounded-xl bg-cyan py-4 text-base font-bold text-primary-foreground transition-all duration-200 hover:brightness-110 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {generating ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                Generating AI Lineup...
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <Sparkles className="h-5 w-5" />
+                Generate AI Lineup
+              </span>
             )}
-          </div>
+          </button>
+          {myLineup.length < 5 && (
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              Add {5 - myLineup.length} more {5 - myLineup.length === 1 ? "player" : "players"} to enable
+            </p>
+          )}
         </div>
       </main>
     </div>
