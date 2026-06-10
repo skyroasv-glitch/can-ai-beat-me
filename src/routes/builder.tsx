@@ -79,11 +79,13 @@ const PLAYERS: Player[] = [
 function LineupBuilderPage() {
   const [matchupId, setMatchupId] = useState<string>(MATCHUPS[0].id);
   const [myLineup, setMyLineup] = useState<Player[]>([]);
-  const [aiLineup, setAiLineup] = useState<Player[] | null>(null);
+  const [aiLineup, setAiLineup] = useState<AIPlayer[] | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const callGenerate = useServerFn(generateAILineup);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -122,18 +124,27 @@ function LineupBuilderPage() {
   const removePlayer = (id: string) => {
     setMyLineup((prev) => prev.filter((p) => p.id !== id));
     setAiLineup(null);
+    setAiError(null);
   };
 
-  const generateAILineup = () => {
+  const generateAI = async () => {
     if (myLineup.length < 5) return;
     setGenerating(true);
     setAiLineup(null);
-    setTimeout(() => {
-      const pool = PLAYERS.filter((p) => !myLineup.find((m) => m.id === p.id));
-      const shuffled = [...pool].sort(() => 0.5 - Math.random());
-      setAiLineup(shuffled.slice(0, 5));
+    setAiError(null);
+    try {
+      const result = await callGenerate({
+        data: {
+          matchup: `${matchup.away} @ ${matchup.home}`,
+          players: myLineup.map((p) => ({ name: p.name, position: p.position, team: p.team })),
+        },
+      });
+      setAiLineup(result.players);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Failed to generate AI lineup");
+    } finally {
       setGenerating(false);
-    }, 1200);
+    }
   };
 
   return (
