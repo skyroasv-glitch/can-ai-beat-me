@@ -14,7 +14,7 @@ const STEPS = [
     icon: Users,
     title: "Pick all-time legends",
     description:
-      "Choose 5 of the greatest NBA players ever. Each pick spins for a random team and decade — with one reroll per player.",
+      "Spin each slot for a random team and decade, then pick a legend who played there in that era — one reroll per slot.",
   },
   {
     step: 2,

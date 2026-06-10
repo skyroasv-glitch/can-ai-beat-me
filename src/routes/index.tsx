@@ -55,7 +55,7 @@ function HomePage() {
 
         {/* Subtitle */}
         <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted-foreground sm:mt-6 sm:text-xl">
-          Pick all-time NBA legends — each spins for a team and decade. Then let AI
+          Spin for a team and decade, pick a legend from that era, then let AI
           try to top your lineup.
         </p>
 

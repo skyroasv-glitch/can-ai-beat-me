@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Dices } from "lucide-react";
-import { runEraSpin, type PoolPlayer } from "@/lib/nba-all-time";
+import { runEraSpin } from "@/lib/nba-all-time";
 import {
   Dialog,
   DialogContent,
@@ -10,19 +10,21 @@ import {
 } from "@/components/ui/dialog";
 
 interface EraSpinModalProps {
-  player: PoolPlayer | null;
   open: boolean;
   spinKey: number;
+  slotLabel?: string;
   mode?: "add" | "reroll";
+  excludePlayerIds?: string[];
   onComplete: (team: string, decade: string) => void;
   onOpenChange: (open: boolean) => void;
 }
 
 export function EraSpinModal({
-  player,
   open,
   spinKey,
+  slotLabel,
   mode = "add",
+  excludePlayerIds = [],
   onComplete,
   onOpenChange,
 }: EraSpinModalProps) {
@@ -31,9 +33,11 @@ export function EraSpinModal({
   const [spinning, setSpinning] = useState(false);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
+  const excludeRef = useRef(excludePlayerIds);
+  excludeRef.current = excludePlayerIds;
 
   useEffect(() => {
-    if (!open || !player) return;
+    if (!open) return;
 
     setSpinning(true);
     setTeam("...");
@@ -41,12 +45,16 @@ export function EraSpinModal({
 
     let cancelled = false;
 
-    void runEraSpin((t, d) => {
-      if (!cancelled) {
-        setTeam(t);
-        setDecade(d);
-      }
-    }).then((result) => {
+    void runEraSpin(
+      (t, d) => {
+        if (!cancelled) {
+          setTeam(t);
+          setDecade(d);
+        }
+      },
+      2000,
+      excludeRef.current
+    ).then((result) => {
       if (cancelled) return;
       setSpinning(false);
       onCompleteRef.current(result.team, result.decade);
@@ -55,7 +63,7 @@ export function EraSpinModal({
     return () => {
       cancelled = true;
     };
-  }, [open, player?.id, spinKey]);
+  }, [open, spinKey]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -66,39 +74,35 @@ export function EraSpinModal({
             {mode === "reroll" ? "Era Reroll" : "Era Spin"}
           </DialogTitle>
           <DialogDescription>
-            {player
-              ? mode === "reroll"
-                ? `One reroll for ${player.name} — spinning a new team and decade...`
-                : `${player.name} is spinning for a team and decade...`
-              : "Spinning..."}
+            {mode === "reroll"
+              ? `One reroll for ${slotLabel ?? "this slot"} — spinning a new team and decade...`
+              : `Spinning a team and decade for ${slotLabel ?? "your next slot"}...`}
           </DialogDescription>
         </DialogHeader>
 
-        {player && (
-          <div className="space-y-4 py-2">
+        <div className="space-y-4 py-2">
+          {slotLabel && (
             <div className="rounded-xl border border-cyan/30 bg-cyan/5 px-4 py-3 text-center">
-              <p className="text-lg font-bold text-foreground">{player.name}</p>
-              <p className="text-xs text-muted-foreground">{player.position}</p>
+              <p className="text-lg font-bold text-foreground">{slotLabel}</p>
+              <p className="text-xs text-muted-foreground">Then pick a player from this era</p>
             </div>
+          )}
 
-            <div
-              className={`grid grid-cols-2 gap-3 ${spinning ? "animate-pulse" : ""}`}
-            >
-              <div className="rounded-xl border border-border bg-background px-3 py-4 text-center">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Team
-                </p>
-                <p className="mt-1 text-sm font-bold text-foreground">{team}</p>
-              </div>
-              <div className="rounded-xl border border-border bg-background px-3 py-4 text-center">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Decade
-                </p>
-                <p className="mt-1 text-sm font-bold text-cyan">{decade}</p>
-              </div>
+          <div className={`grid grid-cols-2 gap-3 ${spinning ? "animate-pulse" : ""}`}>
+            <div className="rounded-xl border border-border bg-background px-3 py-4 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Team
+              </p>
+              <p className="mt-1 text-sm font-bold text-foreground">{team}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-background px-3 py-4 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Decade
+              </p>
+              <p className="mt-1 text-sm font-bold text-cyan">{decade}</p>
             </div>
           </div>
-        )}
+        </div>
       </DialogContent>
     </Dialog>
   );

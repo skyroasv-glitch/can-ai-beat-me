@@ -44,10 +44,16 @@ export const NBA_DECADES = [
 export type NbaTeam = (typeof NBA_TEAMS)[number];
 export type NbaDecade = (typeof NBA_DECADES)[number];
 
+export interface PlayerStint {
+  team: NbaTeam;
+  decades: NbaDecade[];
+}
+
 export interface PoolPlayer {
   id: string;
   name: string;
   position: string;
+  stints: PlayerStint[];
 }
 
 export interface LineupPlayer {
@@ -65,37 +71,241 @@ export interface PlayerStats {
   reb: number;
 }
 
+function stint(team: NbaTeam, decades: NbaDecade[]): PlayerStint {
+  return { team, decades };
+}
+
 export const ALL_TIME_PLAYERS: PoolPlayer[] = [
-  { id: "1", name: "Michael Jordan", position: "SG" },
-  { id: "2", name: "LeBron James", position: "SF" },
-  { id: "3", name: "Kareem Abdul-Jabbar", position: "C" },
-  { id: "4", name: "Magic Johnson", position: "PG" },
-  { id: "5", name: "Larry Bird", position: "SF" },
-  { id: "6", name: "Shaquille O'Neal", position: "C" },
-  { id: "7", name: "Kobe Bryant", position: "SG" },
-  { id: "8", name: "Tim Duncan", position: "PF" },
-  { id: "9", name: "Hakeem Olajuwon", position: "C" },
-  { id: "10", name: "Wilt Chamberlain", position: "C" },
-  { id: "11", name: "Bill Russell", position: "C" },
-  { id: "12", name: "Oscar Robertson", position: "PG" },
-  { id: "13", name: "Julius Erving", position: "SF" },
-  { id: "14", name: "Karl Malone", position: "PF" },
-  { id: "15", name: "John Stockton", position: "PG" },
-  { id: "16", name: "Dirk Nowitzki", position: "PF" },
-  { id: "17", name: "Kevin Durant", position: "SF" },
-  { id: "18", name: "Stephen Curry", position: "PG" },
-  { id: "19", name: "Giannis Antetokounmpo", position: "PF" },
-  { id: "20", name: "Nikola Jokic", position: "C" },
-  { id: "21", name: "Allen Iverson", position: "SG" },
-  { id: "22", name: "Dwyane Wade", position: "SG" },
-  { id: "23", name: "Kawhi Leonard", position: "SF" },
-  { id: "24", name: "Kevin Garnett", position: "PF" },
-  { id: "25", name: "Moses Malone", position: "C" },
-  { id: "26", name: "Isiah Thomas", position: "PG" },
-  { id: "27", name: "Charles Barkley", position: "PF" },
-  { id: "28", name: "Scottie Pippen", position: "SF" },
-  { id: "29", name: "David Robinson", position: "C" },
-  { id: "30", name: "Jerry West", position: "SG" },
+  {
+    id: "1",
+    name: "Michael Jordan",
+    position: "SG",
+    stints: [stint("Chicago Bulls", ["1980s", "1990s"]), stint("Washington Wizards", ["2000s"])],
+  },
+  {
+    id: "2",
+    name: "LeBron James",
+    position: "SF",
+    stints: [
+      stint("Cleveland Cavaliers", ["2000s", "2010s"]),
+      stint("Miami Heat", ["2010s"]),
+      stint("Los Angeles Lakers", ["2010s", "2020s"]),
+    ],
+  },
+  {
+    id: "3",
+    name: "Kareem Abdul-Jabbar",
+    position: "C",
+    stints: [stint("Milwaukee Bucks", ["1970s"]), stint("Los Angeles Lakers", ["1970s", "1980s"])],
+  },
+  {
+    id: "4",
+    name: "Magic Johnson",
+    position: "PG",
+    stints: [stint("Los Angeles Lakers", ["1980s", "1990s"])],
+  },
+  {
+    id: "5",
+    name: "Larry Bird",
+    position: "SF",
+    stints: [stint("Boston Celtics", ["1980s"])],
+  },
+  {
+    id: "6",
+    name: "Shaquille O'Neal",
+    position: "C",
+    stints: [
+      stint("Orlando Magic", ["1990s"]),
+      stint("Los Angeles Lakers", ["1990s", "2000s"]),
+      stint("Miami Heat", ["2000s"]),
+      stint("Phoenix Suns", ["2000s"]),
+      stint("Cleveland Cavaliers", ["2000s"]),
+      stint("Boston Celtics", ["2010s"]),
+    ],
+  },
+  {
+    id: "7",
+    name: "Kobe Bryant",
+    position: "SG",
+    stints: [stint("Los Angeles Lakers", ["1990s", "2000s", "2010s"])],
+  },
+  {
+    id: "8",
+    name: "Tim Duncan",
+    position: "PF",
+    stints: [stint("San Antonio Spurs", ["1990s", "2000s", "2010s"])],
+  },
+  {
+    id: "9",
+    name: "Hakeem Olajuwon",
+    position: "C",
+    stints: [stint("Houston Rockets", ["1980s", "1990s"])],
+  },
+  {
+    id: "10",
+    name: "Wilt Chamberlain",
+    position: "C",
+    stints: [
+      stint("Golden State Warriors", ["1960s"]),
+      stint("Philadelphia 76ers", ["1960s"]),
+      stint("Los Angeles Lakers", ["1960s", "1970s"]),
+    ],
+  },
+  {
+    id: "11",
+    name: "Bill Russell",
+    position: "C",
+    stints: [stint("Boston Celtics", ["1960s"])],
+  },
+  {
+    id: "12",
+    name: "Oscar Robertson",
+    position: "PG",
+    stints: [stint("Sacramento Kings", ["1960s"]), stint("Milwaukee Bucks", ["1970s"])],
+  },
+  {
+    id: "13",
+    name: "Julius Erving",
+    position: "SF",
+    stints: [stint("Philadelphia 76ers", ["1970s", "1980s"])],
+  },
+  {
+    id: "14",
+    name: "Karl Malone",
+    position: "PF",
+    stints: [stint("Utah Jazz", ["1980s", "1990s"]), stint("Los Angeles Lakers", ["2000s"])],
+  },
+  {
+    id: "15",
+    name: "John Stockton",
+    position: "PG",
+    stints: [stint("Utah Jazz", ["1980s", "1990s"])],
+  },
+  {
+    id: "16",
+    name: "Dirk Nowitzki",
+    position: "PF",
+    stints: [stint("Dallas Mavericks", ["2000s", "2010s"])],
+  },
+  {
+    id: "17",
+    name: "Kevin Durant",
+    position: "SF",
+    stints: [
+      stint("Oklahoma City Thunder", ["2000s", "2010s"]),
+      stint("Golden State Warriors", ["2010s"]),
+      stint("Brooklyn Nets", ["2020s"]),
+      stint("Phoenix Suns", ["2020s"]),
+    ],
+  },
+  {
+    id: "18",
+    name: "Stephen Curry",
+    position: "PG",
+    stints: [stint("Golden State Warriors", ["2010s", "2020s"])],
+  },
+  {
+    id: "19",
+    name: "Giannis Antetokounmpo",
+    position: "PF",
+    stints: [stint("Milwaukee Bucks", ["2010s", "2020s"])],
+  },
+  {
+    id: "20",
+    name: "Nikola Jokic",
+    position: "C",
+    stints: [stint("Denver Nuggets", ["2010s", "2020s"])],
+  },
+  {
+    id: "21",
+    name: "Allen Iverson",
+    position: "SG",
+    stints: [
+      stint("Philadelphia 76ers", ["1990s", "2000s"]),
+      stint("Denver Nuggets", ["2000s"]),
+      stint("Detroit Pistons", ["2000s"]),
+      stint("Memphis Grizzlies", ["2000s"]),
+    ],
+  },
+  {
+    id: "22",
+    name: "Dwyane Wade",
+    position: "SG",
+    stints: [
+      stint("Miami Heat", ["2000s", "2010s"]),
+      stint("Chicago Bulls", ["2010s"]),
+      stint("Cleveland Cavaliers", ["2010s"]),
+    ],
+  },
+  {
+    id: "23",
+    name: "Kawhi Leonard",
+    position: "SF",
+    stints: [
+      stint("San Antonio Spurs", ["2010s"]),
+      stint("Toronto Raptors", ["2010s"]),
+      stint("Los Angeles Clippers", ["2010s", "2020s"]),
+    ],
+  },
+  {
+    id: "24",
+    name: "Kevin Garnett",
+    position: "PF",
+    stints: [
+      stint("Minnesota Timberwolves", ["1990s", "2000s"]),
+      stint("Boston Celtics", ["2000s", "2010s"]),
+      stint("Brooklyn Nets", ["2010s"]),
+    ],
+  },
+  {
+    id: "25",
+    name: "Moses Malone",
+    position: "C",
+    stints: [
+      stint("Houston Rockets", ["1970s", "1980s"]),
+      stint("Philadelphia 76ers", ["1980s"]),
+      stint("Washington Wizards", ["1980s"]),
+      stint("Atlanta Hawks", ["1980s", "1990s"]),
+    ],
+  },
+  {
+    id: "26",
+    name: "Isiah Thomas",
+    position: "PG",
+    stints: [stint("Detroit Pistons", ["1980s"])],
+  },
+  {
+    id: "27",
+    name: "Charles Barkley",
+    position: "PF",
+    stints: [
+      stint("Philadelphia 76ers", ["1980s"]),
+      stint("Phoenix Suns", ["1990s"]),
+      stint("Houston Rockets", ["1990s"]),
+    ],
+  },
+  {
+    id: "28",
+    name: "Scottie Pippen",
+    position: "SF",
+    stints: [
+      stint("Chicago Bulls", ["1980s", "1990s"]),
+      stint("Houston Rockets", ["1990s"]),
+      stint("Portland Trail Blazers", ["2000s"]),
+    ],
+  },
+  {
+    id: "29",
+    name: "David Robinson",
+    position: "C",
+    stints: [stint("San Antonio Spurs", ["1990s"])],
+  },
+  {
+    id: "30",
+    name: "Jerry West",
+    position: "SG",
+    stints: [stint("Los Angeles Lakers", ["1960s", "1970s"])],
+  },
 ];
 
 export const ALL_TIME_STATS: Record<string, PlayerStats> = {
@@ -141,19 +351,66 @@ export function compositeScore(stats: PlayerStats): number {
   return stats.ppg + stats.ast + stats.reb;
 }
 
+export function playerPlayedForEra(player: PoolPlayer, team: NbaTeam, decade: NbaDecade): boolean {
+  return player.stints.some((s) => s.team === team && s.decades.includes(decade));
+}
+
+export function getPlayersForEra(
+  team: NbaTeam,
+  decade: NbaDecade,
+  excludeIds: string[] = []
+): PoolPlayer[] {
+  const excluded = new Set(excludeIds);
+  return ALL_TIME_PLAYERS.filter(
+    (p) => !excluded.has(p.id) && playerPlayedForEra(p, team, decade)
+  );
+}
+
 function pickRandom<T>(items: readonly T[]): T {
   return items[Math.floor(Math.random() * items.length)]!;
 }
 
-export function spinTeamAndDecade(): { team: NbaTeam; decade: NbaDecade } {
-  return { team: pickRandom(NBA_TEAMS), decade: pickRandom(NBA_DECADES) };
+export function getAvailableEraCombos(excludePlayerIds: string[] = []): Array<{
+  team: NbaTeam;
+  decade: NbaDecade;
+}> {
+  const excluded = new Set(excludePlayerIds);
+  const seen = new Set<string>();
+  const combos: Array<{ team: NbaTeam; decade: NbaDecade }> = [];
+
+  for (const player of ALL_TIME_PLAYERS) {
+    if (excluded.has(player.id)) continue;
+    for (const stintEntry of player.stints) {
+      for (const decade of stintEntry.decades) {
+        const key = `${stintEntry.team}|${decade}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          combos.push({ team: stintEntry.team, decade });
+        }
+      }
+    }
+  }
+
+  return combos;
+}
+
+export function spinEraWithAvailablePlayers(excludePlayerIds: string[] = []): {
+  team: NbaTeam;
+  decade: NbaDecade;
+} {
+  const combos = getAvailableEraCombos(excludePlayerIds);
+  if (combos.length === 0) {
+    return { team: pickRandom(NBA_TEAMS), decade: pickRandom(NBA_DECADES) };
+  }
+  return pickRandom(combos);
 }
 
 export function runEraSpin(
   onTick: (team: string, decade: string) => void,
-  durationMs = 2000
+  durationMs = 2000,
+  excludePlayerIds: string[] = []
 ): Promise<{ team: NbaTeam; decade: NbaDecade }> {
-  const final = spinTeamAndDecade();
+  const final = spinEraWithAvailablePlayers(excludePlayerIds);
   const start = Date.now();
 
   return new Promise((resolve) => {
@@ -164,7 +421,8 @@ export function runEraSpin(
         resolve(final);
         return;
       }
-      onTick(pickRandom(NBA_TEAMS), pickRandom(NBA_DECADES));
+      const randomCombo = spinEraWithAvailablePlayers(excludePlayerIds);
+      onTick(randomCombo.team, randomCombo.decade);
       const delay = 60 + Math.floor((elapsed / durationMs) * 120);
       setTimeout(tick, delay);
     };
@@ -172,4 +430,19 @@ export function runEraSpin(
   });
 }
 
-export const ALL_TIME_CONTEXT = "All-Time NBA fantasy showdown";
+export function pickPlayerForEra(
+  team: NbaTeam,
+  decade: NbaDecade,
+  excludeIds: string[],
+  preferredName?: string
+): PoolPlayer | null {
+  const pool = getPlayersForEra(team, decade, excludeIds);
+  if (pool.length === 0) return null;
+  if (preferredName) {
+    const match = pool.find((p) => p.name === preferredName);
+    if (match) return match;
+  }
+  return pickRandom(pool);
+}
+
+export const ALL_TIME_CONTEXT = "All-Time NBA era lineup showdown";
