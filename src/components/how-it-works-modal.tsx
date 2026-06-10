@@ -12,23 +12,23 @@ const STEPS = [
   {
     step: 1,
     icon: Users,
-    title: "Build your lineup",
+    title: "Pick all-time legends",
     description:
-      "Pick an NBA matchup and select 5 players for your fantasy lineup. Choose stars you think will dominate tonight's game.",
+      "Choose 5 of the greatest NBA players ever. Each pick spins for a random team and decade — with one reroll per player.",
   },
   {
     step: 2,
     icon: Bot,
     title: "AI builds a counter",
     description:
-      "Our AI analyzes your picks and builds its own competing lineup — optimized to beat yours based on the matchup.",
+      "The AI selects its own all-time lineup to beat yours — each player spins for a team and decade too.",
   },
   {
     step: 3,
     icon: Trophy,
     title: "See who wins",
     description:
-      "Compare stats head-to-head, then let the AI judge the final winner. Can you outsmart the machine?",
+      "Compare career stats head-to-head, then let the AI judge the final winner. Can you outsmart the machine?",
   },
 ] as const;
 

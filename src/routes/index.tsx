@@ -55,8 +55,8 @@ function HomePage() {
 
         {/* Subtitle */}
         <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted-foreground sm:mt-6 sm:text-xl">
-          Build your lineup. Then let AI try to top it. Think you've got the edge?
-          Prove it.
+          Pick all-time NBA legends — each spins for a team and decade. Then let AI
+          try to top your lineup.
         </p>
 
         {/* Sport Selector */}
@@ -119,7 +119,7 @@ function HomePage() {
 
         {/* Footer hint */}
         <p className="mt-8 text-xs text-muted-foreground">
-          Pick NBA to start building your fantasy lineup now.
+          Pick NBA to spin up your all-time lineup now.
         </p>
       </div>
       </div>

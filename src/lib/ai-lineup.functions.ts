@@ -4,18 +4,20 @@ import { z } from "zod";
 const LineupPlayerSchema = z.object({
   name: z.string().min(1).max(100),
   position: z.string().min(1).max(10),
-  team: z.string().min(1).max(10).optional(),
+  team: z.string().min(1).max(50).optional(),
+  decade: z.string().min(1).max(10).optional(),
   reasoning: z.string().optional(),
 });
 
 const InputSchema = z.object({
-  matchup: z.string().min(1).max(200),
+  context: z.string().min(1).max(200),
   players: z
     .array(
       z.object({
         name: z.string().min(1).max(100),
         position: z.string().min(1).max(10),
-        team: z.string().min(1).max(10),
+        team: z.string().min(1).max(50),
+        decade: z.string().min(1).max(10),
       })
     )
     .length(5),
@@ -74,11 +76,11 @@ export const generateAILineup = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => InputSchema.parse(data))
   .handler(async ({ data }) => {
     const systemPrompt =
-      "You are an expert NBA analyst. The user has selected a lineup for the given matchup. Build a competing 5-player lineup optimized to win against theirs. For each player you pick, give one sentence of reasoning. Format your response as JSON with fields: players (array of objects with name, position, reasoning).";
+      "You are an expert NBA historian and analyst. The user is building an all-time NBA fantasy lineup. Each player is assigned a random NBA team and decade era via a spin. Build a competing 5-player all-time lineup optimized to beat theirs. Pick legendary players only. For each player you pick, give one sentence of reasoning. Format your response as JSON with fields: players (array of objects with name, position, reasoning).";
 
-    const userPrompt = `Matchup: ${data.matchup}\n\nUser's lineup:\n${data.players
-      .map((p, i) => `${i + 1}. ${p.name} (${p.position}, ${p.team})`)
-      .join("\n")}\n\nBuild a competing 5-player NBA lineup to beat this one. Return JSON only.`;
+    const userPrompt = `Challenge: ${data.context}\n\nUser's lineup:\n${data.players
+      .map((p, i) => `${i + 1}. ${p.name} (${p.position}) — ${p.team}, ${p.decade}`)
+      .join("\n")}\n\nBuild a competing 5-player all-time NBA lineup to beat this one. Return JSON only.`;
 
     const content = await callAIGateway(systemPrompt, userPrompt);
     const parsed = parseAIJson(content);
@@ -99,7 +101,7 @@ export const generateAILineup = createServerFn({ method: "POST" })
   });
 
 const JudgeInputSchema = z.object({
-  matchup: z.string().min(1).max(200),
+  context: z.string().min(1).max(200),
   userLineup: z.array(LineupPlayerSchema).length(5),
   aiLineup: z.array(LineupPlayerSchema).length(5),
 });
@@ -108,18 +110,18 @@ export const judgeLineupWinner = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => JudgeInputSchema.parse(data))
   .handler(async ({ data }) => {
     const systemPrompt =
-      "You are an expert NBA analyst judging a head-to-head fantasy lineup showdown. Given a matchup and two 5-player lineups (user vs AI), pick a winner based on projected performance, matchup fit, and roster construction. Format your response as JSON with fields: winner (exactly one of: user, ai, tie), headline (short punchy verdict, max 12 words), explanation (2-3 sentences explaining why).";
+      "You are an expert NBA historian judging an all-time fantasy lineup showdown. Each player was spun onto a random NBA team and decade era. Given two 5-player lineups (user vs AI), pick a winner based on career greatness, era fit, team context, and roster construction. Format your response as JSON with fields: winner (exactly one of: user, ai, tie), headline (short punchy verdict, max 12 words), explanation (2-3 sentences explaining why).";
 
     const formatLineup = (label: string, players: z.infer<typeof LineupPlayerSchema>[]) =>
       `${label}:\n${players
         .map((p, i) => {
-          const team = p.team ? `, ${p.team}` : "";
-          const reasoning = p.reasoning ? ` — ${p.reasoning}` : "";
-          return `${i + 1}. ${p.name} (${p.position}${team})${reasoning}`;
+          const era = p.team && p.decade ? ` — ${p.team}, ${p.decade}` : p.team ? ` — ${p.team}` : "";
+          const reasoning = p.reasoning ? ` (${p.reasoning})` : "";
+          return `${i + 1}. ${p.name} (${p.position})${era}${reasoning}`;
         })
         .join("\n")}`;
 
-    const userPrompt = `Matchup: ${data.matchup}\n\n${formatLineup("User lineup", data.userLineup)}\n\n${formatLineup("AI lineup", data.aiLineup)}\n\nWho wins this head-to-head? Return JSON only.`;
+    const userPrompt = `Challenge: ${data.context}\n\n${formatLineup("User lineup", data.userLineup)}\n\n${formatLineup("AI lineup", data.aiLineup)}\n\nWho wins this all-time head-to-head? Return JSON only.`;
 
     const content = await callAIGateway(systemPrompt, userPrompt);
     const parsed = parseAIJson(content);

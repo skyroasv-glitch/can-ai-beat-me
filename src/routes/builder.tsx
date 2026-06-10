@@ -1,144 +1,58 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import {
   X,
   Bot,
   User,
   Sparkles,
   Search,
-  ChevronDown,
   AlertCircle,
   Trophy,
   RotateCcw,
   Swords,
   Share2,
   Check,
+  Dices,
+  RefreshCw,
 } from "lucide-react";
 import { generateAILineup, judgeLineupWinner } from "@/lib/ai-lineup.functions";
+import {
+  ALL_TIME_CONTEXT,
+  ALL_TIME_PLAYERS,
+  compositeScore,
+  getPlayerStats,
+  type LineupPlayer,
+  type NbaDecade,
+  type NbaTeam,
+  type PlayerStats,
+  type PoolPlayer,
+} from "@/lib/nba-all-time";
 import { AppNav } from "@/components/app-nav";
 import { AppFooter } from "@/components/app-footer";
+import { EraSpinModal } from "@/components/era-spin-modal";
+import { SpinningEraLabel } from "@/components/spinning-era-label";
 
 interface AIPlayer {
   name: string;
   position: string;
   reasoning: string;
+  team?: NbaTeam;
+  decade?: NbaDecade;
+  eraRevealed?: boolean;
 }
 
 export const Route = createFileRoute("/builder")({
   head: () => ({
     meta: [
       { title: "Lineup Builder — CanAIBeatMe" },
-      { name: "description", content: "Pick an NBA matchup, build your lineup, and let AI build its own." },
+      { name: "description", content: "Pick all-time NBA legends — each spins for a team and decade — then face the AI." },
       { property: "og:title", content: "Lineup Builder — CanAIBeatMe" },
-      { property: "og:description", content: "Pick an NBA matchup, build your lineup, and let AI build its own." },
+      { property: "og:description", content: "Pick all-time NBA legends — each spins for a team and decade — then face the AI." },
     ],
   }),
   component: LineupBuilderPage,
 });
-
-interface Player {
-  id: string;
-  name: string;
-  team: string;
-  position: string;
-}
-
-interface Matchup {
-  id: string;
-  away: string;
-  home: string;
-  tipoff: string;
-}
-
-const MATCHUPS: Matchup[] = [
-  { id: "lal-bos", away: "Los Angeles Lakers", home: "Boston Celtics", tipoff: "Tonight 7:30 PM ET" },
-  { id: "gsw-den", away: "Golden State Warriors", home: "Denver Nuggets", tipoff: "Tonight 10:00 PM ET" },
-  { id: "mil-phi", away: "Milwaukee Bucks", home: "Philadelphia 76ers", tipoff: "Tomorrow 7:00 PM ET" },
-  { id: "dal-okc", away: "Dallas Mavericks", home: "Oklahoma City Thunder", tipoff: "Tomorrow 8:00 PM ET" },
-];
-
-const PLAYERS: Player[] = [
-  { id: "1", name: "LeBron James", team: "LAL", position: "SF" },
-  { id: "2", name: "Anthony Davis", team: "LAL", position: "PF" },
-  { id: "3", name: "Jayson Tatum", team: "BOS", position: "SF" },
-  { id: "4", name: "Jaylen Brown", team: "BOS", position: "SG" },
-  { id: "5", name: "Stephen Curry", team: "GSW", position: "PG" },
-  { id: "6", name: "Draymond Green", team: "GSW", position: "PF" },
-  { id: "7", name: "Nikola Jokic", team: "DEN", position: "C" },
-  { id: "8", name: "Jamal Murray", team: "DEN", position: "PG" },
-  { id: "9", name: "Giannis Antetokounmpo", team: "MIL", position: "PF" },
-  { id: "10", name: "Damian Lillard", team: "MIL", position: "PG" },
-  { id: "11", name: "Joel Embiid", team: "PHI", position: "C" },
-  { id: "12", name: "Tyrese Maxey", team: "PHI", position: "PG" },
-  { id: "13", name: "Luka Doncic", team: "DAL", position: "PG" },
-  { id: "14", name: "Kyrie Irving", team: "DAL", position: "SG" },
-  { id: "15", name: "Shai Gilgeous-Alexander", team: "OKC", position: "SG" },
-  { id: "16", name: "Chet Holmgren", team: "OKC", position: "C" },
-  { id: "17", name: "Kevin Durant", team: "PHX", position: "SF" },
-  { id: "18", name: "Devin Booker", team: "PHX", position: "SG" },
-  { id: "19", name: "Anthony Edwards", team: "MIN", position: "SG" },
-  { id: "20", name: "Karl-Anthony Towns", team: "MIN", position: "C" },
-  { id: "21", name: "Tyrese Haliburton", team: "IND", position: "PG" },
-  { id: "22", name: "Donovan Mitchell", team: "CLE", position: "SG" },
-  { id: "23", name: "Jimmy Butler", team: "MIA", position: "SF" },
-  { id: "24", name: "Bam Adebayo", team: "MIA", position: "C" },
-  { id: "25", name: "Kawhi Leonard", team: "LAC", position: "SF" },
-  { id: "26", name: "Paul George", team: "LAC", position: "SF" },
-  { id: "27", name: "Trae Young", team: "ATL", position: "PG" },
-  { id: "28", name: "Ja Morant", team: "MEM", position: "PG" },
-  { id: "29", name: "Zion Williamson", team: "NOP", position: "PF" },
-  { id: "30", name: "Victor Wembanyama", team: "SAS", position: "C" },
-];
-
-interface PlayerStats {
-  ppg: number;
-  ast: number;
-  reb: number;
-}
-
-const PLAYER_STATS: Record<string, PlayerStats> = {
-  "LeBron James": { ppg: 25.4, ast: 7.8, reb: 7.2 },
-  "Anthony Davis": { ppg: 24.8, ast: 3.5, reb: 12.3 },
-  "Jayson Tatum": { ppg: 27.1, ast: 4.9, reb: 8.4 },
-  "Jaylen Brown": { ppg: 23.5, ast: 3.6, reb: 5.5 },
-  "Stephen Curry": { ppg: 26.8, ast: 5.1, reb: 4.4 },
-  "Draymond Green": { ppg: 8.6, ast: 7.2, reb: 7.0 },
-  "Nikola Jokic": { ppg: 26.4, ast: 9.0, reb: 12.4 },
-  "Jamal Murray": { ppg: 21.2, ast: 6.5, reb: 4.0 },
-  "Giannis Antetokounmpo": { ppg: 31.1, ast: 6.0, reb: 11.8 },
-  "Damian Lillard": { ppg: 24.3, ast: 7.0, reb: 4.4 },
-  "Joel Embiid": { ppg: 34.7, ast: 5.6, reb: 11.0 },
-  "Tyrese Maxey": { ppg: 25.9, ast: 6.2, reb: 3.7 },
-  "Luka Doncic": { ppg: 33.9, ast: 9.8, reb: 9.2 },
-  "Kyrie Irving": { ppg: 25.6, ast: 5.1, reb: 5.0 },
-  "Shai Gilgeous-Alexander": { ppg: 30.1, ast: 6.2, reb: 5.5 },
-  "Chet Holmgren": { ppg: 16.5, ast: 2.7, reb: 7.9 },
-  "Kevin Durant": { ppg: 27.1, ast: 5.0, reb: 6.7 },
-  "Devin Booker": { ppg: 27.1, ast: 6.9, reb: 4.5 },
-  "Anthony Edwards": { ppg: 25.9, ast: 5.1, reb: 5.4 },
-  "Karl-Anthony Towns": { ppg: 21.8, ast: 3.0, reb: 8.3 },
-  "Tyrese Haliburton": { ppg: 20.1, ast: 10.9, reb: 3.9 },
-  "Donovan Mitchell": { ppg: 26.6, ast: 6.1, reb: 4.1 },
-  "Jimmy Butler": { ppg: 20.8, ast: 5.3, reb: 5.3 },
-  "Bam Adebayo": { ppg: 19.3, ast: 3.9, reb: 10.4 },
-  "Kawhi Leonard": { ppg: 23.7, ast: 3.6, reb: 6.1 },
-  "Paul George": { ppg: 22.6, ast: 3.5, reb: 5.2 },
-  "Trae Young": { ppg: 25.7, ast: 10.8, reb: 2.8 },
-  "Ja Morant": { ppg: 25.1, ast: 8.1, reb: 5.6 },
-  "Zion Williamson": { ppg: 22.9, ast: 5.0, reb: 5.8 },
-  "Victor Wembanyama": { ppg: 21.4, ast: 3.9, reb: 10.6 },
-};
-
-const DEFAULT_STATS: PlayerStats = { ppg: 18.5, ast: 4.2, reb: 5.1 };
-
-function getPlayerStats(name: string): PlayerStats {
-  return PLAYER_STATS[name] ?? DEFAULT_STATS;
-}
-
-function compositeScore(stats: PlayerStats): number {
-  return stats.ppg + stats.ast + stats.reb;
-}
 
 type SlotWinner = "user" | "ai" | "tie";
 
@@ -146,6 +60,8 @@ interface SlotComparison {
   slot: number;
   userName: string;
   aiName: string;
+  userEra: string;
+  aiEra: string;
   userStats: PlayerStats;
   aiStats: PlayerStats;
   userScore: number;
@@ -153,7 +69,7 @@ interface SlotComparison {
   winner: SlotWinner;
 }
 
-function compareSlots(userLineup: Player[], aiLineup: AIPlayer[]): SlotComparison[] {
+function compareSlots(userLineup: LineupPlayer[], aiLineup: AIPlayer[]): SlotComparison[] {
   return Array.from({ length: 5 }, (_, i) => {
     const user = userLineup[i];
     const ai = aiLineup[i];
@@ -168,6 +84,8 @@ function compareSlots(userLineup: Player[], aiLineup: AIPlayer[]): SlotCompariso
       slot: i + 1,
       userName: user.name,
       aiName: ai.name,
+      userEra: `${user.team} · ${user.decade}`,
+      aiEra: ai.team && ai.decade ? `${ai.team} · ${ai.decade}` : "Spinning...",
       userStats,
       aiStats,
       userScore,
@@ -184,8 +102,7 @@ interface Verdict {
 }
 
 function LineupBuilderPage() {
-  const [matchupId, setMatchupId] = useState<string>(MATCHUPS[0].id);
-  const [myLineup, setMyLineup] = useState<Player[]>([]);
+  const [myLineup, setMyLineup] = useState<LineupPlayer[]>([]);
   const [aiLineup, setAiLineup] = useState<AIPlayer[] | null>(null);
   const [generating, setGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -195,6 +112,12 @@ function LineupBuilderPage() {
   const [judging, setJudging] = useState(false);
   const [verdictError, setVerdictError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [spinOpen, setSpinOpen] = useState(false);
+  const [spinPlayer, setSpinPlayer] = useState<PoolPlayer | null>(null);
+  const [spinMode, setSpinMode] = useState<"add" | "reroll">("add");
+  const [spinKey, setSpinKey] = useState(0);
+  const spinPlayerRef = useRef<PoolPlayer | null>(null);
+  const spinModeRef = useRef<"add" | "reroll">("add");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const callGenerate = useServerFn(generateAILineup);
   const callJudge = useServerFn(judgeLineupWinner);
@@ -209,31 +132,95 @@ function LineupBuilderPage() {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  const matchup = MATCHUPS.find((m) => m.id === matchupId)!;
-
   const available = useMemo(
     () =>
-      PLAYERS.filter((p) => !myLineup.find((m) => m.id === p.id)).filter((p) => {
+      ALL_TIME_PLAYERS.filter((p) => !myLineup.find((m) => m.id === p.id)).filter((p) => {
         const q = search.toLowerCase().trim();
         if (!q) return true;
         return (
           p.name.toLowerCase().includes(q) ||
-          p.team.toLowerCase().includes(q) ||
           p.position.toLowerCase().includes(q)
         );
       }),
     [myLineup, search]
   );
 
-  const addPlayer = (player: Player) => {
-    if (myLineup.length >= 5) return;
-    setMyLineup((prev) => [...prev, player]);
+  const startPlayerSpin = (player: PoolPlayer) => {
+    if (myLineup.length >= 5 || spinOpen) return;
+    spinPlayerRef.current = player;
+    spinModeRef.current = "add";
+    setSpinMode("add");
+    setSpinKey((k) => k + 1);
+    setSpinPlayer(player);
+    setSpinOpen(true);
     setSearch("");
     setOpen(false);
+  };
+
+  const startReroll = (player: LineupPlayer) => {
+    if (spinOpen || player.rerolled) return;
+    const poolPlayer: PoolPlayer = {
+      id: player.id,
+      name: player.name,
+      position: player.position,
+    };
+    spinPlayerRef.current = poolPlayer;
+    spinModeRef.current = "reroll";
+    setSpinMode("reroll");
+    setSpinKey((k) => k + 1);
+    setSpinPlayer(poolPlayer);
+    setSpinOpen(true);
+  };
+
+  const handleSpinComplete = useCallback((team: string, decade: string) => {
+    const player = spinPlayerRef.current;
+    if (!player) return;
+
+    if (spinModeRef.current === "reroll") {
+      setMyLineup((prev) =>
+        prev.map((p) =>
+          p.id === player.id
+            ? {
+                ...p,
+                team: team as NbaTeam,
+                decade: decade as NbaDecade,
+                rerolled: true,
+              }
+            : p
+        )
+      );
+    } else {
+      setMyLineup((prev) => [
+        ...prev,
+        {
+          id: player.id,
+          name: player.name,
+          position: player.position,
+          team: team as NbaTeam,
+          decade: decade as NbaDecade,
+          rerolled: false,
+        },
+      ]);
+    }
+
+    spinPlayerRef.current = null;
+    spinModeRef.current = "add";
+    setSpinMode("add");
+    setSpinPlayer(null);
+    setSpinOpen(false);
     setAiLineup(null);
     setVerdict(null);
     setVerdictError(null);
-  };
+  }, []);
+
+  const revealAiEra = useCallback((index: number, team: NbaTeam, decade: NbaDecade) => {
+    setAiLineup((prev) => {
+      if (!prev) return prev;
+      return prev.map((p, i) =>
+        i === index ? { ...p, team, decade, eraRevealed: true } : p
+      );
+    });
+  }, []);
 
   const removePlayer = (id: string) => {
     setMyLineup((prev) => prev.filter((p) => p.id !== id));
@@ -244,7 +231,6 @@ function LineupBuilderPage() {
   };
 
   const playAgain = () => {
-    setMatchupId(MATCHUPS[0].id);
     setMyLineup([]);
     setAiLineup(null);
     setGenerating(false);
@@ -255,6 +241,11 @@ function LineupBuilderPage() {
     setJudging(false);
     setVerdictError(null);
     setCopied(false);
+    setSpinOpen(false);
+    setSpinPlayer(null);
+    setSpinMode("add");
+    spinPlayerRef.current = null;
+    spinModeRef.current = "add";
   };
 
   const shareResults = async () => {
@@ -262,7 +253,7 @@ function LineupBuilderPage() {
     const outcome =
       verdict.winner === "user" ? "won" : verdict.winner === "ai" ? "lost" : "tied";
     const url = window.location.origin;
-    const text = `I challenged AI to beat my NBA lineup and ${outcome}! Try it at ${url}`;
+    const text = `I challenged AI to beat my all-time NBA lineup and ${outcome}! Try it at ${url}`;
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -282,11 +273,18 @@ function LineupBuilderPage() {
     try {
       const result = await callGenerate({
         data: {
-          matchup: `${matchup.away} @ ${matchup.home}`,
-          players: myLineup.map((p) => ({ name: p.name, position: p.position, team: p.team })),
+          context: ALL_TIME_CONTEXT,
+          players: myLineup.map((p) => ({
+            name: p.name,
+            position: p.position,
+            team: p.team,
+            decade: p.decade,
+          })),
         },
       });
-      setAiLineup(result.players);
+      setAiLineup(
+        result.players.map((p) => ({ ...p, eraRevealed: false }))
+      );
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "Failed to generate AI lineup");
     } finally {
@@ -302,15 +300,18 @@ function LineupBuilderPage() {
     try {
       const result = await callJudge({
         data: {
-          matchup: `${matchup.away} @ ${matchup.home}`,
+          context: ALL_TIME_CONTEXT,
           userLineup: myLineup.map((p) => ({
             name: p.name,
             position: p.position,
             team: p.team,
+            decade: p.decade,
           })),
           aiLineup: aiLineup.map((p) => ({
             name: p.name,
             position: p.position,
+            team: p.team,
+            decade: p.decade,
             reasoning: p.reasoning,
           })),
         },
@@ -330,31 +331,37 @@ function LineupBuilderPage() {
 
   return (
     <div className="relative flex min-h-screen flex-col bg-background">
-      <AppNav showBack subtitle="NBA Lineup Builder" />
+      <AppNav showBack subtitle="All-Time NBA" />
+
+      <EraSpinModal
+        player={spinPlayer}
+        open={spinOpen}
+        spinKey={spinKey}
+        mode={spinMode}
+        onOpenChange={(next) => {
+          if (!next && spinOpen) {
+            spinPlayerRef.current = null;
+            spinModeRef.current = "add";
+            setSpinPlayer(null);
+            setSpinMode("add");
+          }
+          setSpinOpen(next);
+        }}
+        onComplete={handleSpinComplete}
+      />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
-        {/* Matchup selector */}
-        <section className="mb-6 sm:mb-8">
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Select Matchup
-          </label>
-          <div className="relative">
-            <select
-              value={matchupId}
-              onChange={(e) => setMatchupId(e.target.value)}
-              className="w-full appearance-none rounded-xl border border-border bg-surface px-3 py-3.5 pr-10 text-sm font-semibold text-foreground outline-none transition-colors focus:border-cyan focus:ring-1 focus:ring-cyan/30 cursor-pointer sm:px-4 sm:py-4 sm:pr-12 sm:text-base"
-            >
-              {MATCHUPS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.away} @ {m.home} — {m.tipoff}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+        <section className="mb-6 rounded-2xl border border-cyan/20 bg-cyan/5 px-4 py-4 sm:mb-8 sm:px-6 sm:py-5">
+          <div className="flex items-start gap-3">
+            <Dices className="mt-0.5 h-5 w-5 shrink-0 text-cyan" />
+            <div>
+              <h2 className="text-sm font-bold text-foreground sm:text-base">All-Time NBA Legends</h2>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+                Pick from the greatest players in NBA history. Every selection spins for a random
+                team and decade — with one reroll per player. Then the AI builds its counter-lineup.
+              </p>
+            </div>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {matchup.away} @ {matchup.home} · {matchup.tipoff}
-          </p>
         </section>
 
         {/* Two-column lineups */}
@@ -375,14 +382,14 @@ function LineupBuilderPage() {
                 <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
-                  placeholder={myLineup.length >= 5 ? "Lineup full" : "Search players to add..."}
+                  placeholder={myLineup.length >= 5 ? "Lineup full" : "Search all-time legends..."}
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
                     setOpen(true);
                   }}
                   onFocus={() => setOpen(true)}
-                  disabled={myLineup.length >= 5}
+                  disabled={myLineup.length >= 5 || spinOpen}
                   className="w-full rounded-xl border border-border bg-background pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
@@ -394,7 +401,7 @@ function LineupBuilderPage() {
                     available.map((p) => (
                       <button
                         key={p.id}
-                        onClick={() => addPlayer(p)}
+                        onClick={() => startPlayerSpin(p)}
                         className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-cyan/10"
                       >
                         <div className="flex items-center gap-3">
@@ -403,10 +410,10 @@ function LineupBuilderPage() {
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-foreground">{p.name}</p>
-                            <p className="text-xs text-muted-foreground">{p.team}</p>
+                            <p className="text-xs text-muted-foreground">All-time · {p.position}</p>
                           </div>
                         </div>
-                        <span className="text-xs font-medium text-cyan">Add</span>
+                        <span className="text-xs font-medium text-cyan">Spin</span>
                       </button>
                     ))
                   )}
@@ -443,18 +450,31 @@ function LineupBuilderPage() {
                       </span>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-foreground">{player.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {player.position} · {player.team}
+                        <p className="truncate text-xs text-muted-foreground">
+                          {player.position} · {player.team} · {player.decade}
                         </p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => removePlayer(player.id)}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                      aria-label={`Remove ${player.name}`}
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      {!player.rerolled && (
+                        <button
+                          onClick={() => startReroll(player)}
+                          disabled={spinOpen}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-cyan/10 hover:text-cyan disabled:opacity-40"
+                          aria-label={`Reroll team and decade for ${player.name}`}
+                          title="Reroll team & decade (1×)"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => removePlayer(player.id)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        aria-label={`Remove ${player.name}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -473,8 +493,8 @@ function LineupBuilderPage() {
 
             <div className="mb-4 rounded-xl border border-border bg-background/40 px-4 py-3 text-xs text-muted-foreground">
               {aiLineup
-                ? "The AI has built its lineup. Scroll to compare."
-                : "Build your lineup, then generate the AI's counter-lineup below."}
+                ? "The AI has picked its legends — watch each era spin reveal."
+                : "Build your all-time lineup, then generate the AI's counter-picks below."}
             </div>
 
             <div className="space-y-2">
@@ -518,12 +538,27 @@ function LineupBuilderPage() {
                       </span>
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-foreground">{player.name}</p>
-                        <p className="text-xs text-muted-foreground">{player.position}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {player.position}
+                          {" · "}
+                          {player.eraRevealed && player.team && player.decade ? (
+                            <span>
+                              {player.team} · {player.decade}
+                            </span>
+                          ) : (
+                            <SpinningEraLabel
+                              active={!player.eraRevealed}
+                              onComplete={(team, decade) => revealAiEra(i, team, decade)}
+                            />
+                          )}
+                        </p>
                       </div>
                     </div>
-                    <p className="mt-2 pl-10 text-xs leading-relaxed text-muted-foreground">
-                      {player.reasoning}
-                    </p>
+                    {player.eraRevealed && (
+                      <p className="mt-2 pl-10 text-xs leading-relaxed text-muted-foreground">
+                        {player.reasoning}
+                      </p>
+                    )}
                   </div>
                 );
               })}
@@ -535,7 +570,7 @@ function LineupBuilderPage() {
         <div className="mt-6 sm:mt-8">
           <button
             onClick={() => { void generateAI(); }}
-            disabled={myLineup.length < 5 || generating}
+            disabled={myLineup.length < 5 || generating || spinOpen}
             className="w-full rounded-xl bg-cyan py-3.5 text-sm font-bold text-primary-foreground transition-all duration-200 hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 sm:py-4 sm:text-base"
           >
             {generating ? (
@@ -582,7 +617,7 @@ function LineupBuilderPage() {
               </div>
             </div>
             <p className="mb-6 text-xs text-muted-foreground">
-              Slot winners are based on combined PPG + AST + REB. Ties award no point.
+              Career averages (PPG + AST + REB) decide each slot. Ties award no point.
             </p>
 
             <div className="space-y-4">
@@ -624,7 +659,10 @@ function LineupBuilderPage() {
                     >
                       <div className="mb-2 flex items-center gap-2">
                         <User className="h-3.5 w-3.5 text-cyan" />
-                        <p className="text-sm font-semibold text-foreground">{slot.userName}</p>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{slot.userName}</p>
+                          <p className="text-[10px] text-muted-foreground">{slot.userEra}</p>
+                        </div>
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-center">
                         <div>
@@ -654,7 +692,10 @@ function LineupBuilderPage() {
                     >
                       <div className="mb-2 flex items-center gap-2">
                         <Bot className="h-3.5 w-3.5 text-cyan" />
-                        <p className="text-sm font-semibold text-foreground">{slot.aiName}</p>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{slot.aiName}</p>
+                          <p className="text-[10px] text-muted-foreground">{slot.aiEra}</p>
+                        </div>
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-center">
                         <div>
@@ -680,10 +721,15 @@ function LineupBuilderPage() {
             </div>
 
             <div className="mt-8 space-y-4">
+              {!verdict && aiLineup?.some((p) => !p.eraRevealed) && (
+                <p className="text-center text-xs text-muted-foreground">
+                  Wait for all AI era spins to finish before judging.
+                </p>
+              )}
               {!verdict && (
                 <button
                   onClick={() => { void revealWinner(); }}
-                  disabled={judging}
+                  disabled={judging || !!aiLineup?.some((p) => !p.eraRevealed)}
                   className="w-full rounded-xl border border-cyan/40 bg-cyan/10 py-4 text-base font-bold text-cyan transition-all duration-200 hover:bg-cyan/20 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {judging ? (
