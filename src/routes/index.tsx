@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Zap, Trophy, BrainCircuit, ArrowRight, Lock } from "lucide-react";
+import { Trophy, BrainCircuit, ArrowRight, Lock, Zap } from "lucide-react";
+import { AppNav } from "@/components/app-nav";
+import { AppFooter } from "@/components/app-footer";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -20,7 +22,7 @@ function HomePage() {
   const [selectedSport, setSelectedSport] = useState<Sport>("nba");
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background px-4 py-20">
+    <div className="relative flex min-h-screen flex-col bg-background">
       {/* Ambient background glow */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
@@ -33,19 +35,11 @@ function HomePage() {
         />
       </div>
 
-      {/* Top navigation */}
-      <nav className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 py-5 md:px-10">
-        <Link to="/" className="flex items-center gap-2 text-lg font-bold tracking-tight text-foreground">
-          <Zap className="h-5 w-5 text-cyan" />
-          <span>CanAIBeatMe</span>
-        </Link>
-        <div className="flex items-center gap-6 text-sm text-muted-foreground">
-          <span className="hidden sm:inline">No login required</span>
-        </div>
-      </nav>
+      <AppNav />
 
       {/* Hero content */}
-      <div className="relative z-10 mx-auto max-w-3xl text-center">
+      <div className="relative z-10 mx-auto flex flex-1 flex-col items-center justify-center px-4 py-12 sm:py-20">
+      <div className="max-w-3xl text-center">
         {/* Badge */}
         <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-cyan/20 bg-cyan/5 px-4 py-1.5 text-xs font-medium text-cyan">
           <BrainCircuit className="h-3.5 w-3.5" />
@@ -53,24 +47,24 @@ function HomePage() {
         </div>
 
         {/* Title */}
-        <h1 className="text-5xl font-extrabold tracking-tight text-foreground sm:text-6xl md:text-7xl">
+        <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-6xl md:text-7xl">
           Can AI{" "}
           <span className="text-cyan text-glow">Beat</span>{" "}
           Me?
         </h1>
 
         {/* Subtitle */}
-        <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground sm:text-xl">
+        <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted-foreground sm:mt-6 sm:text-xl">
           Build your lineup. Then let AI try to top it. Think you've got the edge?
           Prove it.
         </p>
 
         {/* Sport Selector */}
-        <div className="mt-12">
+        <div className="mt-8 sm:mt-12">
           <p className="mb-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
             Choose your sport
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-4">
+          <div className="flex flex-wrap items-stretch justify-center gap-3 sm:gap-4">
             <SportCard
               id="nba"
               name="NBA"
@@ -128,6 +122,9 @@ function HomePage() {
           Pick NBA to start building your fantasy lineup now.
         </p>
       </div>
+      </div>
+
+      <AppFooter />
     </div>
   );
 }
@@ -151,7 +148,7 @@ function SportCard({
     <button
       onClick={onSelect}
       disabled={status === "coming-soon"}
-      className={`relative flex flex-col items-center gap-3 rounded-2xl border px-8 py-6 transition-all duration-200 ${
+      className={`relative flex w-[calc(50%-0.375rem)] min-w-[7.5rem] flex-col items-center gap-3 rounded-2xl border px-4 py-5 transition-all duration-200 sm:w-auto sm:min-w-0 sm:px-8 sm:py-6 ${
         status === "coming-soon"
           ? "cursor-not-allowed opacity-50"
           : "cursor-pointer hover:bg-surface-raised"
