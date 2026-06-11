@@ -897,18 +897,26 @@ function LineupBuilderPage() {
                           <p className="text-[10px] text-muted-foreground">{slot.aiEra}</p>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="grid grid-cols-5 gap-1 text-center">
                         <div>
-                          <p className="text-xs text-muted-foreground">PPG</p>
+                          <p className="text-[10px] text-muted-foreground">PPG</p>
                           <p className="text-sm font-bold text-foreground">{slot.aiStats.ppg}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">AST</p>
-                          <p className="text-sm font-bold text-foreground">{slot.aiStats.ast}</p>
+                          <p className="text-[10px] text-muted-foreground">RPG</p>
+                          <p className="text-sm font-bold text-foreground">{slot.aiStats.rpg}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">REB</p>
-                          <p className="text-sm font-bold text-foreground">{slot.aiStats.reb}</p>
+                          <p className="text-[10px] text-muted-foreground">APG</p>
+                          <p className="text-sm font-bold text-foreground">{slot.aiStats.apg}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground">SPG</p>
+                          <p className="text-sm font-bold text-foreground">{slot.aiStats.spg}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground">BPG</p>
+                          <p className="text-sm font-bold text-foreground">{slot.aiStats.bpg}</p>
                         </div>
                       </div>
                       <p className="mt-2 text-center text-xs text-muted-foreground">
