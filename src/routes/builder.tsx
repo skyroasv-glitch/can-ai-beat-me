@@ -864,7 +864,7 @@ function LineupBuilderPage() {
               </div>
             </div>
             <p className="mb-6 text-xs text-muted-foreground">
-              Career averages (PPG + AST + REB) decide each slot. Ties award no point.
+              Impact score (PTS + 1.2·REB + 1.5·AST + 2·STL + 2·BLK − TOV) decides each slot.
             </p>
 
             <div className="space-y-4">
