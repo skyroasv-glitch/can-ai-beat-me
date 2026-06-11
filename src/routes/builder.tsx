@@ -523,56 +523,94 @@ function LineupBuilderPage() {
 
             {/* Player picker — active after era spin */}
             {pickingEra?.status === "picking" && (
-              <div ref={dropdownRef} className="relative mb-4">
-                <div className="mb-2 rounded-lg border border-cyan/20 bg-cyan/5 px-3 py-2 text-xs text-muted-foreground">
-                  Slot {(pickingSlot >= 0 ? pickingSlot : 0) + 1}: pick from{" "}
-                  <span className="font-semibold text-foreground">
-                    {pickingEra.team} · {pickingEra.decade}
+              <div ref={dropdownRef} className="mb-4 rounded-xl border border-cyan/30 bg-background/50 p-3 sm:p-4">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-cyan px-3 py-1 text-xs font-bold text-primary-foreground">
+                    {pickingEra.team}
+                  </span>
+                  <span className="rounded-full bg-orange-500/80 px-3 py-1 text-xs font-bold text-white">
+                    {pickingEra.decade}
+                  </span>
+                  <span className="ml-auto text-xs font-semibold text-muted-foreground">
+                    Slot {(pickingSlot >= 0 ? pickingSlot : 0) + 1} of 5
                   </span>
                 </div>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="text"
-                    placeholder="Search players for this era..."
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setOpen(true);
-                    }}
-                    onFocus={() => setOpen(true)}
-                    disabled={spinOpen}
-                    className="w-full rounded-xl border border-border bg-background pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-cyan focus:ring-1 focus:ring-cyan/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-                {open && pickingSlot >= 0 && (
-                  <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-surface-raised shadow-2xl">
-                    {available.length === 0 ? (
-                      <div className="px-4 py-3 text-sm text-muted-foreground">
-                        No eligible players for this era
-                      </div>
-                    ) : (
-                      available.map((p) => (
-                        <button
-                          key={p.id}
-                          onClick={() => pickPlayerForSlot(pickingSlot, p)}
-                          className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-cyan/10"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-xs font-bold text-muted-foreground">
-                              {p.position}
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">{p.name}</p>
-                              <p className="text-xs text-muted-foreground">{p.position}</p>
-                            </div>
-                          </div>
-                          <span className="text-xs font-medium text-cyan">Pick</span>
-                        </button>
-                      ))
-                    )}
+
+                {/* Filters row */}
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <div className="flex overflow-hidden rounded-lg border border-border">
+                    {(["All", "G", "F", "C"] as const).map((g) => (
+                      <button
+                        key={g}
+                        onClick={() => setPosFilter(g)}
+                        className={`px-3 py-1.5 text-xs font-bold transition-colors ${
+                          posFilter === g
+                            ? "bg-cyan text-primary-foreground"
+                            : "bg-background text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    ))}
                   </div>
-                )}
+                  <div className="relative flex-1 min-w-[140px]">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="text"
+                      placeholder="Search..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      disabled={spinOpen}
+                      className="w-full rounded-lg border border-border bg-background pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-cyan"
+                    />
+                  </div>
+                  <select
+                    value={sortKey}
+                    onChange={(e) => setSortKey(e.target.value as SortKey)}
+                    className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-bold text-foreground outline-none focus:border-cyan"
+                  >
+                    {SORT_OPTIONS.map((o) => (
+                      <option key={o.key} value={o.key}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <p className="mb-2 text-xs text-muted-foreground">
+                  {available.length} player{available.length === 1 ? "" : "s"} available
+                </p>
+
+                <div className="max-h-[420px] overflow-y-auto rounded-lg border border-border bg-background/40 divide-y divide-border">
+                  {available.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                      No players match these filters
+                    </div>
+                  ) : (
+                    available.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => pickingSlot >= 0 && pickPlayerForSlot(pickingSlot, p)}
+                        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-cyan/10"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-foreground">{p.name}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {p.pos} · {pickingEra.team.split(" ").pop()} · {pickingEra.decade}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2 text-center font-mono text-[11px]">
+                          <Stat label="PPG" value={p.ppg} hl={sortKey === "ppg"} />
+                          <Stat label="RPG" value={p.rpg} hl={sortKey === "rpg"} />
+                          <Stat label="APG" value={p.apg} hl={sortKey === "apg"} />
+                          <Stat label="SPG" value={p.spg} hl={sortKey === "spg"} />
+                          <Stat label="BPG" value={p.bpg} hl={sortKey === "bpg"} />
+                          <Stat label="IMP" value={p.impact} hl={sortKey === "impact"} />
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
             )}
 
