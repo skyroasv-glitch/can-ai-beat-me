@@ -244,16 +244,21 @@ function LineupBuilderPage() {
     if (slotIndex === null) return;
 
     setSlots((prev) =>
-      prev.map((slot, i) =>
-        i === slotIndex
-          ? {
-              status: "picking" as const,
-              team: team as NbaTeam,
-              decade: decade as NbaDecade,
-              rerolled: spinModeRef.current === "reroll",
-            }
-          : slot
-      )
+      prev.map((slot, i) => {
+        if (i === slotIndex) {
+          return {
+            status: "picking" as const,
+            team: team as NbaTeam,
+            decade: decade as NbaDecade,
+            rerolled: spinModeRef.current === "reroll",
+          };
+        }
+        // Reset any other slot stuck in "picking" — only one pick can be active at a time.
+        if (slot.status === "picking") {
+          return { status: "empty" as const };
+        }
+        return slot;
+      })
     );
 
     setActivePickSlot(slotIndex);
