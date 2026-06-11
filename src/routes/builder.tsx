@@ -135,17 +135,17 @@ function compareSlots(slots: UserSlot[], aiLineup: AIPlayer[]): SlotComparison[]
         aiName: ai?.name ?? "—",
         userEra: user ? `${user.team} · ${user.decade}` : "—",
         aiEra: ai?.team && ai.decade ? `${ai.team} · ${ai.decade}` : "—",
-        userStats: { ppg: 0, ast: 0, reb: 0 },
-        aiStats: { ppg: 0, ast: 0, reb: 0 },
+        userStats: ZERO_STATS,
+        aiStats: ZERO_STATS,
         userScore: 0,
         aiScore: 0,
         winner: "tie" as SlotWinner,
       };
     }
-    const userStats = getPlayerStats(user.name);
-    const aiStats = getPlayerStats(ai.name);
-    const userScore = compositeScore(userStats);
-    const aiScore = compositeScore(aiStats);
+    const userStats = user.stats;
+    const aiStats = ai.stats ?? ZERO_STATS;
+    const userScore = userStats.impact;
+    const aiScore = aiStats.impact;
     let winner: SlotWinner = "tie";
     if (userScore > aiScore) winner = "user";
     else if (aiScore > userScore) winner = "ai";
