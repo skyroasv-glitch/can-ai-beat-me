@@ -31,7 +31,7 @@ async function callAIGateway(systemPrompt: string, userPrompt: string): Promise<
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Lovable-API-Key": key,
+      Authorization: `Bearer ${key}`,
     },
     body: JSON.stringify({
       model: "google/gemini-3-flash-preview",
