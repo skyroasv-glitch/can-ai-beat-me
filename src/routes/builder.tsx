@@ -340,6 +340,7 @@ function LineupBuilderPage() {
                 position: picked.position,
                 team,
                 decade,
+                stats: playerStatsFrom(picked),
                 eraRevealed: true,
               }
             : p
