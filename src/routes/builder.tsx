@@ -170,6 +170,16 @@ interface Verdict {
   explanation: string;
 }
 
+function Stat({ label, value, hl }: { label: string; value: number; hl?: boolean }) {
+  return (
+    <div className={`min-w-[34px] ${hl ? "text-cyan" : "text-foreground"}`}>
+      <p className="font-bold leading-tight">{value.toFixed(1)}</p>
+      <p className="text-[9px] font-normal uppercase text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+
 function LineupBuilderPage() {
   const [slots, setSlots] = useState<UserSlot[]>(EMPTY_SLOTS);
   const [aiLineup, setAiLineup] = useState<AIPlayer[] | null>(null);
