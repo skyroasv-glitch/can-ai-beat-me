@@ -94,27 +94,25 @@ function HomePage() {
 
         {/* Start Button */}
         <div className="mt-10">
-          <Link
-            to={selectedSport === "nba" ? "/builder" : "/"}
-            onClick={(e) => {
-              if (selectedSport !== "nba") {
-                e.preventDefault();
-              }
-            }}
-            className="group inline-flex items-center justify-center gap-2 rounded-xl bg-cyan px-8 py-4 text-base font-bold text-primary-foreground transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
-          >
-            {selectedSport === "nba" ? (
-              <>
-                Start Building
-                <ArrowRight className="h-5 w-5 transition-transform duration-200 group-hover:translate-x-1" />
-              </>
-            ) : (
-              <>
-                Coming Soon
-                <Lock className="h-5 w-5" />
-              </>
-            )}
-          </Link>
+          {selectedSport === "nba" ? (
+            <Link
+              to="/builder"
+              className="group inline-flex items-center justify-center gap-2 rounded-xl bg-cyan px-8 py-4 text-base font-bold text-primary-foreground transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
+            >
+              Start Building
+              <ArrowRight className="h-5 w-5 transition-transform duration-200 group-hover:translate-x-1" />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              aria-disabled="true"
+              className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-cyan/40 px-8 py-4 text-base font-bold text-primary-foreground opacity-70"
+            >
+              Coming Soon
+              <Lock className="h-5 w-5" />
+            </button>
+          )}
         </div>
 
         {/* Footer hint */}
