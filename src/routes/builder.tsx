@@ -45,6 +45,8 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: "bpg", label: "BPG" },
 ];
 
+const ZERO_STATS: PlayerStats = { ppg: 0, rpg: 0, apg: 0, spg: 0, bpg: 0, impact: 0 };
+
 interface AIPlayer {
   id?: string;
   name: string;
@@ -52,6 +54,7 @@ interface AIPlayer {
   reasoning: string;
   team?: NbaTeam;
   decade?: NbaDecade;
+  stats?: PlayerStats;
   eraRevealed?: boolean;
 }
 
@@ -65,6 +68,7 @@ type UserSlot =
       position: string;
       team: NbaTeam;
       decade: NbaDecade;
+      stats: PlayerStats;
       rerolled: boolean;
     };
 
@@ -77,6 +81,7 @@ function slotToLineupPlayer(slot: Extract<UserSlot, { status: "filled" }>): Line
     position: slot.position,
     team: slot.team,
     decade: slot.decade,
+    stats: slot.stats,
     rerolled: slot.rerolled,
   };
 }
