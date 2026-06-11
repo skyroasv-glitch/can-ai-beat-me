@@ -19,20 +19,31 @@ import {
 import { generateAILineup, judgeLineupWinner } from "@/lib/ai-lineup.functions";
 import {
   ALL_TIME_CONTEXT,
-  compositeScore,
-  getPlayerStats,
   getPlayersForEra,
   pickPlayerForEra,
+  playerStatsFrom,
+  inPositionGroup,
   type LineupPlayer,
   type NbaDecade,
   type NbaTeam,
   type PlayerStats,
   type PoolPlayer,
+  type PositionGroup,
 } from "@/lib/nba-all-time";
 import { AppNav } from "@/components/app-nav";
 import { AppFooter } from "@/components/app-footer";
 import { EraSpinModal } from "@/components/era-spin-modal";
 import { SpinningEraLabel } from "@/components/spinning-era-label";
+
+type SortKey = "impact" | "ppg" | "rpg" | "apg" | "spg" | "bpg";
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "impact", label: "Impact" },
+  { key: "ppg", label: "PPG" },
+  { key: "rpg", label: "RPG" },
+  { key: "apg", label: "APG" },
+  { key: "spg", label: "SPG" },
+  { key: "bpg", label: "BPG" },
+];
 
 interface AIPlayer {
   id?: string;
