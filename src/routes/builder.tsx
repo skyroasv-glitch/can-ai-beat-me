@@ -220,15 +220,19 @@ function LineupBuilderPage() {
 
   const available = useMemo(() => {
     if (!pickingEra || pickingEra.status !== "picking") return [];
-    const pool = getPlayersForEra(pickingEra.team, pickingEra.decade, usedPlayerIds);
+    let pool = getPlayersForEra(pickingEra.team, pickingEra.decade, usedPlayerIds);
+    if (posFilter !== "All") {
+      pool = pool.filter((p) => inPositionGroup(p.pos, posFilter));
+    }
     const q = search.toLowerCase().trim();
-    if (!q) return pool;
-    return pool.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.position.toLowerCase().includes(q)
-    );
-  }, [pickingEra, search, usedPlayerIds]);
+    if (q) {
+      pool = pool.filter(
+        (p) => p.name.toLowerCase().includes(q) || p.pos.toLowerCase().includes(q)
+      );
+    }
+    const sorted = [...pool].sort((a, b) => b[sortKey] - a[sortKey]);
+    return sorted;
+  }, [pickingEra, search, usedPlayerIds, posFilter, sortKey]);
 
   const clearResults = () => {
     setAiLineup(null);
