@@ -177,6 +177,8 @@ function LineupBuilderPage() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [posFilter, setPosFilter] = useState<"All" | PositionGroup>("All");
+  const [sortKey, setSortKey] = useState<SortKey>("impact");
   const [activePickSlot, setActivePickSlot] = useState<number | null>(null);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [judging, setJudging] = useState(false);
