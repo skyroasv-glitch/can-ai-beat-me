@@ -304,6 +304,7 @@ function LineupBuilderPage() {
               position: player.position,
               team: slot.team,
               decade: slot.decade,
+              stats: playerStatsFrom(player),
               rerolled: slot.rerolled,
             }
           : s
