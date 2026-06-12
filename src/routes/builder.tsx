@@ -58,51 +58,62 @@ interface AIPlayer {
   eraRevealed?: boolean;
 }
 
-type UserSlot =
-  | { status: "empty" }
-  | { status: "picking"; team: NbaTeam; decade: NbaDecade; rerolled: boolean }
-  | {
-      status: "filled";
-      id: string;
-      name: string;
-      position: string;
-      team: NbaTeam;
-      decade: NbaDecade;
-      stats: PlayerStats;
-      rerolled: boolean;
-    };
+interface FilledPlayer {
+  id: string;
+  name: string;
+  position: string;
+  stats: PlayerStats;
+}
 
-const EMPTY_SLOTS: UserSlot[] = Array.from({ length: 5 }, () => ({ status: "empty" }));
+interface UserSlot {
+  team: NbaTeam | null;
+  decade: NbaDecade | null;
+  player: FilledPlayer | null;
+  teamRerolled: boolean;
+  decadeRerolled: boolean;
+}
 
-function slotToLineupPlayer(slot: Extract<UserSlot, { status: "filled" }>): LineupPlayer {
+const EMPTY_SLOT: UserSlot = {
+  team: null,
+  decade: null,
+  player: null,
+  teamRerolled: false,
+  decadeRerolled: false,
+};
+const EMPTY_SLOTS: UserSlot[] = Array.from({ length: 5 }, () => ({ ...EMPTY_SLOT }));
+
+function isFilled(s: UserSlot): boolean {
+  return !!(s.team && s.decade && s.player);
+}
+
+function slotToLineupPlayer(slot: UserSlot): LineupPlayer | null {
+  if (!slot.team || !slot.decade || !slot.player) return null;
   return {
-    id: slot.id,
-    name: slot.name,
-    position: slot.position,
+    id: slot.player.id,
+    name: slot.player.name,
+    position: slot.player.position,
     team: slot.team,
     decade: slot.decade,
-    stats: slot.stats,
-    rerolled: slot.rerolled,
+    stats: slot.player.stats,
+    rerolled: slot.teamRerolled || slot.decadeRerolled,
   };
 }
 
 function filledPlayerIds(slots: UserSlot[]): string[] {
-  return slots
-    .filter((s): s is Extract<UserSlot, { status: "filled" }> => s.status === "filled")
-    .map((s) => s.id);
+  return slots.filter((s) => s.player).map((s) => s.player!.id);
 }
 
 function isLineupComplete(slots: UserSlot[]): boolean {
-  return slots.every((s) => s.status === "filled");
+  return slots.every(isFilled);
 }
 
 export const Route = createFileRoute("/builder")({
   head: () => ({
     meta: [
       { title: "Lineup Builder — CanAIBeatMe" },
-      { name: "description", content: "Spin for a team and decade, then pick a legend who played there in that era." },
+      { name: "description", content: "Spin a team and decade, then pick a legend who played there in that era." },
       { property: "og:title", content: "Lineup Builder — CanAIBeatMe" },
-      { property: "og:description", content: "Spin for a team and decade, then pick a legend who played there in that era." },
+      { property: "og:description", content: "Spin a team and decade, then pick a legend who played there in that era." },
     ],
   }),
   component: LineupBuilderPage,
@@ -126,7 +137,7 @@ interface SlotComparison {
 function compareSlots(slots: UserSlot[], aiLineup: AIPlayer[]): SlotComparison[] {
   return Array.from({ length: 5 }, (_, i) => {
     const slot = slots[i];
-    const user = slot?.status === "filled" ? slotToLineupPlayer(slot) : null;
+    const user = slot ? slotToLineupPlayer(slot) : null;
     const ai = aiLineup[i];
     if (!user || !ai) {
       return {
@@ -179,6 +190,11 @@ function Stat({ label, value, hl }: { label: string; value: number; hl?: boolean
   );
 }
 
+interface SpinState {
+  slotIndex: number;
+  kind: "team" | "decade";
+  mode: "spin" | "reroll";
+}
 
 function LineupBuilderPage() {
   const [slots, setSlots] = useState<UserSlot[]>(EMPTY_SLOTS);
@@ -186,7 +202,6 @@ function LineupBuilderPage() {
   const [generating, setGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false);
   const [posFilter, setPosFilter] = useState<"All" | PositionGroup>("All");
   const [sortKey, setSortKey] = useState<SortKey>("impact");
   const [activePickSlot, setActivePickSlot] = useState<number | null>(null);
@@ -194,19 +209,12 @@ function LineupBuilderPage() {
   const [judging, setJudging] = useState(false);
   const [verdictError, setVerdictError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [spinOpen, setSpinOpen] = useState(false);
-  const [spinSlotIndex, setSpinSlotIndex] = useState<number | null>(null);
-  const [spinMode, setSpinMode] = useState<"add" | "reroll">("add");
+  const [spin, setSpin] = useState<SpinState | null>(null);
   const [spinKey, setSpinKey] = useState(0);
-  const spinSlotRef = useRef<number | null>(null);
-  const spinModeRef = useRef<"add" | "reroll">("add");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const myLineup = useMemo(
-    () =>
-      slots
-        .filter((s): s is Extract<UserSlot, { status: "filled" }> => s.status === "filled")
-        .map(slotToLineupPlayer),
+    () => slots.map(slotToLineupPlayer).filter((p): p is LineupPlayer => p !== null),
     [slots]
   );
   const lineupComplete = isLineupComplete(slots);
@@ -217,32 +225,30 @@ function LineupBuilderPage() {
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
+        if (activePickSlot !== null) setActivePickSlot(null);
       }
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
-  }, []);
+  }, [activePickSlot]);
 
-  const pickingSlot = activePickSlot ?? slots.findIndex((s) => s.status === "picking");
-  const pickingEra =
-    pickingSlot >= 0 && slots[pickingSlot]?.status === "picking" ? slots[pickingSlot] : null;
+  // The slot ready for player picking (both team+decade set, no player yet) or the explicitly active one
+  const pickingSlotIdx =
+    activePickSlot !== null && slots[activePickSlot] && !slots[activePickSlot].player
+      ? activePickSlot
+      : slots.findIndex((s) => s.team && s.decade && !s.player);
+  const pickingSlot = pickingSlotIdx >= 0 ? slots[pickingSlotIdx] : null;
 
   const available = useMemo(() => {
-    if (!pickingEra || pickingEra.status !== "picking") return [];
-    let pool = getPlayersForEra(pickingEra.team, pickingEra.decade, usedPlayerIds);
-    if (posFilter !== "All") {
-      pool = pool.filter((p) => inPositionGroup(p.pos, posFilter));
-    }
+    if (!pickingSlot || !pickingSlot.team || !pickingSlot.decade) return [];
+    let pool = getPlayersForEra(pickingSlot.team, pickingSlot.decade, usedPlayerIds);
+    if (posFilter !== "All") pool = pool.filter((p) => inPositionGroup(p.pos, posFilter));
     const q = search.toLowerCase().trim();
     if (q) {
-      pool = pool.filter(
-        (p) => p.name.toLowerCase().includes(q) || p.pos.toLowerCase().includes(q)
-      );
+      pool = pool.filter((p) => p.name.toLowerCase().includes(q) || p.pos.toLowerCase().includes(q));
     }
-    const sorted = [...pool].sort((a, b) => b[sortKey] - a[sortKey]);
-    return sorted;
-  }, [pickingEra, search, usedPlayerIds, posFilter, sortKey]);
+    return [...pool].sort((a, b) => b[sortKey] - a[sortKey]);
+  }, [pickingSlot, search, usedPlayerIds, posFilter, sortKey]);
 
   const clearResults = () => {
     setAiLineup(null);
@@ -250,85 +256,64 @@ function LineupBuilderPage() {
     setVerdictError(null);
   };
 
-  const startSlotSpin = (slotIndex: number) => {
-    if (spinOpen || slots[slotIndex]?.status === "filled") return;
-    spinSlotRef.current = slotIndex;
-    spinModeRef.current = "add";
-    setSpinMode("add");
-    setSpinSlotIndex(slotIndex);
+  const startSpin = (slotIndex: number, kind: "team" | "decade", mode: "spin" | "reroll") => {
+    if (spin) return;
+    setSpin({ slotIndex, kind, mode });
     setSpinKey((k) => k + 1);
-    setSpinOpen(true);
   };
 
-  const startSlotReroll = (slotIndex: number) => {
-    const slot = slots[slotIndex];
-    if (spinOpen || slot?.status !== "filled" || slot.rerolled) return;
-    spinSlotRef.current = slotIndex;
-    spinModeRef.current = "reroll";
-    setSpinMode("reroll");
-    setSpinSlotIndex(slotIndex);
-    setSpinKey((k) => k + 1);
-    setSpinOpen(true);
-  };
-
-  const handleSpinComplete = useCallback((team: string, decade: string) => {
-    const slotIndex = spinSlotRef.current;
-    if (slotIndex === null) return;
-
-    setSlots((prev) =>
-      prev.map((slot, i) => {
-        if (i === slotIndex) {
+  const handleSpinComplete = useCallback(
+    (value: string) => {
+      if (!spin) return;
+      const { slotIndex, kind, mode } = spin;
+      setSlots((prev) =>
+        prev.map((s, i) => {
+          if (i !== slotIndex) return s;
+          if (kind === "team") {
+            return {
+              ...s,
+              team: value as NbaTeam,
+              // Rerolling team invalidates current player
+              player: mode === "reroll" ? null : s.player,
+              teamRerolled: mode === "reroll" ? true : s.teamRerolled,
+            };
+          }
           return {
-            status: "picking" as const,
-            team: team as NbaTeam,
-            decade: decade as NbaDecade,
-            rerolled: spinModeRef.current === "reroll",
+            ...s,
+            decade: value as NbaDecade,
+            player: mode === "reroll" ? null : s.player,
+            decadeRerolled: mode === "reroll" ? true : s.decadeRerolled,
           };
-        }
-        // Reset any other slot stuck in "picking" — only one pick can be active at a time.
-        if (slot.status === "picking") {
-          return { status: "empty" as const };
-        }
-        return slot;
-      })
-    );
-
-    setActivePickSlot(slotIndex);
-    setSearch("");
-    setOpen(true);
-    spinSlotRef.current = null;
-    spinModeRef.current = "add";
-    setSpinMode("add");
-    setSpinSlotIndex(null);
-    setSpinOpen(false);
-    setAiLineup(null);
-    setVerdict(null);
-    setVerdictError(null);
-  }, []);
+        })
+      );
+      setSpin(null);
+      setActivePickSlot(slotIndex);
+      setSearch("");
+      clearResults();
+    },
+    [spin]
+  );
 
   const pickPlayerForSlot = (slotIndex: number, player: PoolPlayer) => {
     const slot = slots[slotIndex];
-    if (slot?.status !== "picking") return;
-
+    if (!slot?.team || !slot?.decade) return;
     setSlots((prev) =>
       prev.map((s, i) =>
         i === slotIndex
           ? {
-              status: "filled" as const,
-              id: player.id,
-              name: player.name,
-              position: player.position,
-              team: slot.team,
-              decade: slot.decade,
-              stats: playerStatsFrom(player),
-              rerolled: slot.rerolled,
+              ...s,
+              player: {
+                id: player.id,
+                name: player.name,
+                position: player.position,
+                stats: playerStatsFrom(player),
+              },
             }
           : s
       )
     );
     setActivePickSlot(null);
     setSearch("");
-    setOpen(false);
     clearResults();
   };
 
@@ -337,15 +322,11 @@ function LineupBuilderPage() {
       setAiLineup((prev) => {
         if (!prev) return prev;
         const exclude = new Set(usedPlayerIds);
-        prev.forEach((p) => {
-          if (p.id) exclude.add(p.id);
-        });
+        prev.forEach((p) => { if (p.id) exclude.add(p.id); });
         const suggested = prev[index];
         const picked = pickPlayerForEra(team, decade, [...exclude], suggested?.name);
         if (!picked) {
-          return prev.map((p, i) =>
-            i === index ? { ...p, team, decade, eraRevealed: true } : p
-          );
+          return prev.map((p, i) => (i === index ? { ...p, team, decade, eraRevealed: true } : p));
         }
         return prev.map((p, i) =>
           i === index
@@ -367,39 +348,38 @@ function LineupBuilderPage() {
   );
 
   const clearSlot = (slotIndex: number) => {
-    setSlots((prev) => prev.map((s, i) => (i === slotIndex ? { status: "empty" } : s)));
+    setSlots((prev) => prev.map((s, i) => (i === slotIndex ? { ...EMPTY_SLOT } : s)));
     if (activePickSlot === slotIndex) {
       setActivePickSlot(null);
-      setOpen(false);
       setSearch("");
     }
     setAiError(null);
     clearResults();
   };
 
+  const clearPlayer = (slotIndex: number) => {
+    setSlots((prev) => prev.map((s, i) => (i === slotIndex ? { ...s, player: null } : s)));
+    setActivePickSlot(slotIndex);
+    clearResults();
+  };
+
   const playAgain = () => {
-    setSlots(EMPTY_SLOTS);
+    setSlots(EMPTY_SLOTS.map((s) => ({ ...s })));
     setAiLineup(null);
     setGenerating(false);
     setAiError(null);
     setSearch("");
-    setOpen(false);
     setActivePickSlot(null);
     setVerdict(null);
     setJudging(false);
     setVerdictError(null);
     setCopied(false);
-    setSpinOpen(false);
-    setSpinSlotIndex(null);
-    setSpinMode("add");
-    spinSlotRef.current = null;
-    spinModeRef.current = "add";
+    setSpin(null);
   };
 
   const shareResults = async () => {
     if (!verdict) return;
-    const outcome =
-      verdict.winner === "user" ? "won" : verdict.winner === "ai" ? "lost" : "tied";
+    const outcome = verdict.winner === "user" ? "won" : verdict.winner === "ai" ? "lost" : "tied";
     const url = window.location.origin;
     const text = `I challenged AI to beat my all-time NBA lineup and ${outcome}! Try it at ${url}`;
     try {
@@ -422,21 +402,17 @@ function LineupBuilderPage() {
       const result = await callGenerate({
         data: {
           context: ALL_TIME_CONTEXT,
-          players: slots.map((s) => {
-            if (s.status !== "filled") throw new Error("Incomplete lineup");
-            return {
-              name: s.name,
-              position: s.position,
-              team: s.team,
-              decade: s.decade,
-            };
-          }),
+          players: myLineup.map((p) => ({
+            name: p.name,
+            position: p.position,
+            team: p.team,
+            decade: p.decade,
+          })),
         },
       });
-      setAiLineup(
-        result.players.map((p) => ({ ...p, eraRevealed: false }))
-      );
+      setAiLineup(result.players.map((p) => ({ ...p, eraRevealed: false })));
     } catch (err) {
+      console.error("generateAI failed", err);
       setAiError(err instanceof Error ? err.message : "Failed to generate AI lineup");
     } finally {
       setGenerating(false);
@@ -452,15 +428,12 @@ function LineupBuilderPage() {
       const result = await callJudge({
         data: {
           context: ALL_TIME_CONTEXT,
-          userLineup: slots.map((s) => {
-            if (s.status !== "filled") throw new Error("Incomplete lineup");
-            return {
-              name: s.name,
-              position: s.position,
-              team: s.team,
-              decade: s.decade,
-            };
-          }),
+          userLineup: myLineup.map((p) => ({
+            name: p.name,
+            position: p.position,
+            team: p.team,
+            decade: p.decade,
+          })),
           aiLineup: aiLineup.map((p) => ({
             name: p.name,
             position: p.position,
@@ -472,35 +445,39 @@ function LineupBuilderPage() {
       });
       setVerdict(result);
     } catch (err) {
+      console.error("judge failed", err);
       setVerdictError(err instanceof Error ? err.message : "Failed to judge lineup");
     } finally {
       setJudging(false);
     }
   };
 
-  const slotComparisons =
-    aiLineup && lineupComplete ? compareSlots(slots, aiLineup) : null;
+  const slotComparisons = aiLineup && lineupComplete ? compareSlots(slots, aiLineup) : null;
   const userSlotWins = slotComparisons?.filter((s) => s.winner === "user").length ?? 0;
   const aiSlotWins = slotComparisons?.filter((s) => s.winner === "ai").length ?? 0;
+
+  const spinSlotLabel = spin ? `Slot ${spin.slotIndex + 1}` : undefined;
+  const spinFixed = spin
+    ? {
+        team: spin.kind === "decade" ? slots[spin.slotIndex]?.team : null,
+        decade: spin.kind === "team" ? slots[spin.slotIndex]?.decade : null,
+      }
+    : {};
 
   return (
     <div className="relative flex min-h-screen flex-col bg-background">
       <AppNav showBack subtitle="All-Time NBA" />
 
       <EraSpinModal
-        open={spinOpen}
+        open={!!spin}
         spinKey={spinKey}
-        slotLabel={spinSlotIndex !== null ? `Slot ${spinSlotIndex + 1}` : undefined}
-        mode={spinMode}
+        kind={spin?.kind ?? "team"}
+        slotLabel={spinSlotLabel}
+        mode={spin?.mode ?? "spin"}
+        fixed={spinFixed}
         excludePlayerIds={usedPlayerIds}
         onOpenChange={(next) => {
-          if (!next && spinOpen) {
-            spinSlotRef.current = null;
-            spinModeRef.current = "add";
-            setSpinSlotIndex(null);
-            setSpinMode("add");
-          }
-          setSpinOpen(next);
+          if (!next) setSpin(null);
         }}
         onComplete={handleSpinComplete}
       />
@@ -512,14 +489,13 @@ function LineupBuilderPage() {
             <div>
               <h2 className="text-sm font-bold text-foreground sm:text-base">All-Time NBA Legends</h2>
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                Spin each slot for a team and decade, then pick a legend who played for that team in
-                that era. One reroll per slot. Then the AI builds its counter-lineup.
+                For each slot, spin a Team and a Decade independently. Then pick a legend who played
+                for that team in that era. One reroll per field. Then the AI counters.
               </p>
             </div>
           </div>
         </section>
 
-        {/* Two-column lineups */}
         <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
           {/* Your Lineup */}
           <section className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
@@ -531,22 +507,20 @@ function LineupBuilderPage() {
               </span>
             </div>
 
-            {/* Player picker — active after era spin */}
-            {pickingEra?.status === "picking" && (
+            {pickingSlot && pickingSlot.team && pickingSlot.decade && (
               <div ref={dropdownRef} className="mb-4 rounded-xl border border-cyan/30 bg-background/50 p-3 sm:p-4">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-cyan px-3 py-1 text-xs font-bold text-primary-foreground">
-                    {pickingEra.team}
+                    {pickingSlot.team}
                   </span>
                   <span className="rounded-full bg-orange-500/80 px-3 py-1 text-xs font-bold text-white">
-                    {pickingEra.decade}
+                    {pickingSlot.decade}
                   </span>
                   <span className="ml-auto text-xs font-semibold text-muted-foreground">
-                    Slot {(pickingSlot >= 0 ? pickingSlot : 0) + 1} of 5
+                    Slot {pickingSlotIdx + 1} of 5
                   </span>
                 </div>
 
-                {/* Filters row */}
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <div className="flex overflow-hidden rounded-lg border border-border">
                     {(["All", "G", "F", "C"] as const).map((g) => (
@@ -570,7 +544,7 @@ function LineupBuilderPage() {
                       placeholder="Search..."
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      disabled={spinOpen}
+                      disabled={!!spin}
                       className="w-full rounded-lg border border-border bg-background pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-cyan"
                     />
                   </div>
@@ -580,9 +554,7 @@ function LineupBuilderPage() {
                     className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-bold text-foreground outline-none focus:border-cyan"
                   >
                     {SORT_OPTIONS.map((o) => (
-                      <option key={o.key} value={o.key}>
-                        {o.label}
-                      </option>
+                      <option key={o.key} value={o.key}>{o.label}</option>
                     ))}
                   </select>
                 </div>
@@ -600,13 +572,13 @@ function LineupBuilderPage() {
                     available.map((p) => (
                       <button
                         key={p.id}
-                        onClick={() => pickingSlot >= 0 && pickPlayerForSlot(pickingSlot, p)}
+                        onClick={() => pickPlayerForSlot(pickingSlotIdx, p)}
                         className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-cyan/10"
                       >
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-foreground">{p.name}</p>
                           <p className="text-[10px] text-muted-foreground">
-                            {p.pos} · {pickingEra.team.split(" ").pop()} · {pickingEra.decade}
+                            {p.pos} · {pickingSlot.team!.split(" ").pop()} · {pickingSlot.decade}
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-2 text-center font-mono text-[11px]">
@@ -627,97 +599,121 @@ function LineupBuilderPage() {
             {/* Slot cards */}
             <div className="space-y-2">
               {slots.map((slot, i) => {
-                if (slot.status === "empty") {
-                  return (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-background/40 px-3 py-3 sm:px-4"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
+                const filled = isFilled(slot);
+                return (
+                  <div
+                    key={i}
+                    className={`animate-fade-in rounded-xl border px-3 py-3 sm:px-4 ${
+                      filled
+                        ? "border-cyan/30 bg-cyan/5"
+                        : slot.team || slot.decade
+                        ? "border-cyan/20 bg-cyan/5"
+                        : "border-dashed border-border bg-background/40"
+                    }`}
+                    style={{ animationDelay: `${i * 60}ms` }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${filled || slot.team || slot.decade ? "bg-cyan/15 text-cyan" : "bg-muted text-muted-foreground"}`}>
                           {i + 1}
                         </span>
-                        <p className="text-sm text-muted-foreground">Spin for team & decade</p>
-                      </div>
-                      <button
-                        onClick={() => startSlotSpin(i)}
-                        disabled={spinOpen}
-                        className="rounded-lg bg-cyan/10 px-3 py-1.5 text-xs font-bold text-cyan transition-colors hover:bg-cyan/20 disabled:opacity-40"
-                      >
-                        Spin
-                      </button>
-                    </div>
-                  );
-                }
-
-                if (slot.status === "picking") {
-                  return (
-                    <div
-                      key={i}
-                      className="animate-fade-in rounded-xl border border-cyan/30 bg-cyan/5 px-3 py-3 sm:px-4"
-                      style={{ animationDelay: `${i * 75}ms` }}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan/15 text-xs font-bold text-cyan">
-                            {i + 1}
-                          </span>
-                          <div className="min-w-0">
+                        <div className="min-w-0">
+                          {filled ? (
+                            <>
+                              <p className="truncate text-sm font-semibold text-foreground">{slot.player!.name}</p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {slot.player!.position} · {slot.team} · {slot.decade}
+                              </p>
+                            </>
+                          ) : (
                             <p className="text-sm font-semibold text-foreground">
-                              {slot.team} · {slot.decade}
+                              {slot.team && slot.decade ? "Pick a player above" : "Spin team & decade"}
                             </p>
-                            <p className="text-xs text-muted-foreground">Pick a player above</p>
-                          </div>
+                          )}
                         </div>
+                      </div>
+                      {filled && (
                         <button
                           onClick={() => clearSlot(i)}
                           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                          aria-label="Clear slot"
+                          aria-label={`Remove ${slot.player!.name}`}
                         >
                           <X className="h-4 w-4" />
                         </button>
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={slot.id}
-                    className="animate-fade-in flex items-center justify-between rounded-xl border border-cyan/30 bg-cyan/5 px-3 py-3 sm:px-4"
-                    style={{ animationDelay: `${i * 75}ms` }}
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan/15 text-xs font-bold text-cyan">
-                        {i + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-foreground">{slot.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {slot.position} · {slot.team} · {slot.decade}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      {!slot.rerolled && (
-                        <button
-                          onClick={() => startSlotReroll(i)}
-                          disabled={spinOpen}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-cyan/10 hover:text-cyan disabled:opacity-40"
-                          aria-label={`Reroll era for slot ${i + 1}`}
-                          title="Reroll team & decade (1×)"
-                        >
-                          <RefreshCw className="h-3.5 w-3.5" />
-                        </button>
                       )}
-                      <button
-                        onClick={() => clearSlot(i)}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                        aria-label={`Remove ${slot.name}`}
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
                     </div>
+
+                    {/* Team + Decade controls row */}
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {/* Team */}
+                      <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background/60 px-2.5 py-1.5">
+                        <div className="min-w-0">
+                          <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Team</p>
+                          <p className="truncate text-xs font-bold text-foreground">{slot.team ?? "—"}</p>
+                        </div>
+                        {!slot.team ? (
+                          <button
+                            onClick={() => startSpin(i, "team", "spin")}
+                            disabled={!!spin}
+                            className="rounded-md bg-cyan/15 px-2 py-1 text-[10px] font-bold text-cyan hover:bg-cyan/25 disabled:opacity-40"
+                          >
+                            Spin
+                          </button>
+                        ) : !slot.teamRerolled ? (
+                          <button
+                            onClick={() => startSpin(i, "team", "reroll")}
+                            disabled={!!spin}
+                            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-cyan/10 hover:text-cyan disabled:opacity-40"
+                            title="Reroll team (1×)"
+                            aria-label="Reroll team"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          </button>
+                        ) : (
+                          <span className="text-[9px] font-semibold uppercase text-muted-foreground">Locked</span>
+                        )}
+                      </div>
+
+                      {/* Decade */}
+                      <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background/60 px-2.5 py-1.5">
+                        <div className="min-w-0">
+                          <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Decade</p>
+                          <p className="truncate text-xs font-bold text-foreground">{slot.decade ?? "—"}</p>
+                        </div>
+                        {!slot.decade ? (
+                          <button
+                            onClick={() => startSpin(i, "decade", "spin")}
+                            disabled={!!spin}
+                            className="rounded-md bg-cyan/15 px-2 py-1 text-[10px] font-bold text-cyan hover:bg-cyan/25 disabled:opacity-40"
+                          >
+                            Spin
+                          </button>
+                        ) : !slot.decadeRerolled ? (
+                          <button
+                            onClick={() => startSpin(i, "decade", "reroll")}
+                            disabled={!!spin}
+                            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-cyan/10 hover:text-cyan disabled:opacity-40"
+                            title="Reroll decade (1×)"
+                            aria-label="Reroll decade"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          </button>
+                        ) : (
+                          <span className="text-[9px] font-semibold uppercase text-muted-foreground">Locked</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {filled && (
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          onClick={() => clearPlayer(i)}
+                          className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-cyan"
+                        >
+                          Change player
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -745,26 +741,16 @@ function LineupBuilderPage() {
                 const player = aiLineup?.[i];
                 if (generating) {
                   return (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-background/40 px-4 py-3 animate-pulse"
-                    >
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
-                        {i + 1}
-                      </span>
+                    <div key={i} className="flex items-center gap-3 rounded-xl border border-border bg-background/40 px-4 py-3 animate-pulse">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">{i + 1}</span>
                       <div className="h-3 w-32 rounded bg-muted" />
                     </div>
                   );
                 }
                 if (!player) {
                   return (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-background/40 px-4 py-3"
-                    >
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
-                        {i + 1}
-                      </span>
+                    <div key={i} className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-background/40 px-4 py-3">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">{i + 1}</span>
                       <p className="text-sm text-muted-foreground">Awaiting AI</p>
                     </div>
                   );
@@ -776,18 +762,14 @@ function LineupBuilderPage() {
                     style={{ animationDelay: `${i * 75}ms` }}
                   >
                     <div className="flex items-center gap-3">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan/10 text-xs font-bold text-cyan">
-                        {i + 1}
-                      </span>
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan/10 text-xs font-bold text-cyan">{i + 1}</span>
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-foreground">{player.name}</p>
                         <p className="text-xs text-muted-foreground">
                           {player.position}
                           {" · "}
                           {player.eraRevealed && player.team && player.decade ? (
-                            <span>
-                              {player.team} · {player.decade}
-                            </span>
+                            <span>{player.team} · {player.decade}</span>
                           ) : (
                             <SpinningEraLabel
                               active={!player.eraRevealed}
@@ -817,7 +799,7 @@ function LineupBuilderPage() {
         <div className="mt-6 sm:mt-8">
           <button
             onClick={() => { void generateAI(); }}
-            disabled={!lineupComplete || generating || spinOpen}
+            disabled={!lineupComplete || generating || !!spin}
             className="w-full rounded-xl bg-cyan py-3.5 text-sm font-bold text-primary-foreground transition-all duration-200 hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 sm:py-4 sm:text-base"
           >
             {generating ? (
@@ -834,7 +816,7 @@ function LineupBuilderPage() {
           </button>
           {!lineupComplete && (
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              Spin and pick all 5 slots to enable AI lineup
+              Spin team + decade and pick a player in all 5 slots to enable AI lineup
             </p>
           )}
           {aiError && (
@@ -854,13 +836,9 @@ function LineupBuilderPage() {
                 <h2 className="text-base font-bold text-foreground sm:text-lg">Head-to-Head Results</h2>
               </div>
               <div className="flex items-center gap-3 text-sm sm:ml-auto">
-                <span className="rounded-md bg-cyan/10 px-2.5 py-1 font-bold text-cyan">
-                  You {userSlotWins}
-                </span>
+                <span className="rounded-md bg-cyan/10 px-2.5 py-1 font-bold text-cyan">You {userSlotWins}</span>
                 <span className="text-muted-foreground">—</span>
-                <span className="rounded-md bg-muted px-2.5 py-1 font-bold text-muted-foreground">
-                  AI {aiSlotWins}
-                </span>
+                <span className="rounded-md bg-muted px-2.5 py-1 font-bold text-muted-foreground">AI {aiSlotWins}</span>
               </div>
             </div>
             <p className="mb-6 text-xs text-muted-foreground">
@@ -875,109 +853,44 @@ function LineupBuilderPage() {
                   style={{ animationDelay: `${i * 60}ms` }}
                 >
                   <div className="mb-3 flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Slot {slot.slot}
-                    </span>
-                    {slot.winner !== "tie" && (
-                      <span
-                        className={`rounded-md px-2 py-0.5 text-xs font-bold ${
-                          slot.winner === "user"
-                            ? "bg-cyan/15 text-cyan"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Slot {slot.slot}</span>
+                    {slot.winner !== "tie" ? (
+                      <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${slot.winner === "user" ? "bg-cyan/15 text-cyan" : "bg-muted text-muted-foreground"}`}>
                         {slot.winner === "user" ? "You win" : "AI wins"}
                       </span>
-                    )}
-                    {slot.winner === "tie" && (
-                      <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">
-                        Tie
-                      </span>
+                    ) : (
+                      <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">Tie</span>
                     )}
                   </div>
-
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div
-                      className={`rounded-lg border px-4 py-3 ${
-                        slot.winner === "user"
-                          ? "border-cyan/40 bg-cyan/5"
-                          : "border-border bg-surface"
-                      }`}
-                    >
-                      <div className="mb-2 flex items-center gap-2">
-                        <User className="h-3.5 w-3.5 text-cyan" />
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{slot.userName}</p>
-                          <p className="text-[10px] text-muted-foreground">{slot.userEra}</p>
+                    {([
+                      { label: "user" as const, name: slot.userName, era: slot.userEra, stats: slot.userStats, score: slot.userScore, Icon: User },
+                      { label: "ai" as const, name: slot.aiName, era: slot.aiEra, stats: slot.aiStats, score: slot.aiScore, Icon: Bot },
+                    ]).map((side) => (
+                      <div
+                        key={side.label}
+                        className={`rounded-lg border px-4 py-3 ${slot.winner === side.label ? "border-cyan/40 bg-cyan/5" : "border-border bg-surface"}`}
+                      >
+                        <div className="mb-2 flex items-center gap-2">
+                          <side.Icon className="h-3.5 w-3.5 text-cyan" />
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">{side.name}</p>
+                            <p className="text-[10px] text-muted-foreground">{side.era}</p>
+                          </div>
                         </div>
+                        <div className="grid grid-cols-5 gap-1 text-center">
+                          {(["ppg","rpg","apg","spg","bpg"] as const).map((k) => (
+                            <div key={k}>
+                              <p className="text-[10px] text-muted-foreground">{k.toUpperCase()}</p>
+                              <p className="text-sm font-bold text-foreground">{side.stats[k].toFixed(1)}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-2 text-center text-xs text-muted-foreground">
+                          Total: <span className={`font-bold ${slot.winner === side.label ? "text-cyan" : "text-foreground"}`}>{side.score.toFixed(1)}</span>
+                        </p>
                       </div>
-                      <div className="grid grid-cols-5 gap-1 text-center">
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">PPG</p>
-                          <p className="text-sm font-bold text-foreground">{slot.userStats.ppg}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">RPG</p>
-                          <p className="text-sm font-bold text-foreground">{slot.userStats.rpg}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">APG</p>
-                          <p className="text-sm font-bold text-foreground">{slot.userStats.apg}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">SPG</p>
-                          <p className="text-sm font-bold text-foreground">{slot.userStats.spg}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">BPG</p>
-                          <p className="text-sm font-bold text-foreground">{slot.userStats.bpg}</p>
-                        </div>
-                      </div>
-                      <p className="mt-2 text-center text-xs text-muted-foreground">
-                        Total: <span className="font-bold text-cyan">{slot.userScore.toFixed(1)}</span>
-                      </p>
-                    </div>
-
-                    <div
-                      className={`rounded-lg border px-4 py-3 ${
-                        slot.winner === "ai"
-                          ? "border-cyan/40 bg-cyan/5"
-                          : "border-border bg-surface"
-                      }`}
-                    >
-                      <div className="mb-2 flex items-center gap-2">
-                        <Bot className="h-3.5 w-3.5 text-cyan" />
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{slot.aiName}</p>
-                          <p className="text-[10px] text-muted-foreground">{slot.aiEra}</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-5 gap-1 text-center">
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">PPG</p>
-                          <p className="text-sm font-bold text-foreground">{slot.aiStats.ppg}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">RPG</p>
-                          <p className="text-sm font-bold text-foreground">{slot.aiStats.rpg}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">APG</p>
-                          <p className="text-sm font-bold text-foreground">{slot.aiStats.apg}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">SPG</p>
-                          <p className="text-sm font-bold text-foreground">{slot.aiStats.spg}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">BPG</p>
-                          <p className="text-sm font-bold text-foreground">{slot.aiStats.bpg}</p>
-                        </div>
-                      </div>
-                      <p className="mt-2 text-center text-xs text-muted-foreground">
-                        Total: <span className="font-bold text-foreground">{slot.aiScore.toFixed(1)}</span>
-                      </p>
-                    </div>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -985,9 +898,7 @@ function LineupBuilderPage() {
 
             <div className="mt-8 space-y-4">
               {!verdict && aiLineup?.some((p) => !p.eraRevealed) && (
-                <p className="text-center text-xs text-muted-foreground">
-                  Wait for all AI era spins to finish before judging.
-                </p>
+                <p className="text-center text-xs text-muted-foreground">Wait for all AI era spins to finish before judging.</p>
               )}
               {!verdict && (
                 <button
@@ -1024,16 +935,10 @@ function LineupBuilderPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold uppercase tracking-wider text-cyan">
-                        {verdict.winner === "user"
-                          ? "You Win!"
-                          : verdict.winner === "ai"
-                            ? "AI Wins!"
-                            : "It's a Tie!"}
+                        {verdict.winner === "user" ? "You Win!" : verdict.winner === "ai" ? "AI Wins!" : "It's a Tie!"}
                       </p>
                       <h3 className="mt-1 text-lg font-bold text-foreground sm:text-xl">{verdict.headline}</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                        {verdict.explanation}
-                      </p>
+                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{verdict.explanation}</p>
                     </div>
                   </div>
                 </div>
@@ -1045,17 +950,7 @@ function LineupBuilderPage() {
                   className="w-full rounded-xl border border-border bg-surface py-3.5 text-sm font-bold text-foreground transition-all duration-200 hover:bg-muted active:scale-[0.99] sm:py-4 sm:text-base"
                 >
                   <span className="flex items-center justify-center gap-2">
-                    {copied ? (
-                      <>
-                        <Check className="h-5 w-5 text-cyan" />
-                        Copied to clipboard!
-                      </>
-                    ) : (
-                      <>
-                        <Share2 className="h-5 w-5" />
-                        Share Results
-                      </>
-                    )}
+                    {copied ? (<><Check className="h-5 w-5 text-cyan" />Copied to clipboard!</>) : (<><Share2 className="h-5 w-5" />Share Results</>)}
                   </span>
                 </button>
               )}
