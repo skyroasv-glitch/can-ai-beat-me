@@ -83,21 +83,23 @@ export const generateAILineup = createServerFn({ method: "POST" })
       .join("\n")}\n\nBuild a competing 5-player all-time NBA lineup to beat this one. Return JSON only.`;
 
     const content = await callAIGateway(systemPrompt, userPrompt);
-    const parsed = parseAIJson(content);
+    const parsed = parseAIJson(content) as Record<string, unknown>;
 
-    const Output = z.object({
-      players: z
-        .array(
-          z.object({
-            name: z.string(),
-            position: z.string(),
-            reasoning: z.string(),
-          })
-        )
-        .min(1)
-        .max(5),
+    const PlayerOut = z.object({
+      name: z.string(),
+      position: z.string(),
+      reasoning: z.string().default(""),
     });
-    return Output.parse(parsed);
+    const playersRaw =
+      (parsed.players as unknown) ??
+      (parsed.lineup as unknown) ??
+      (parsed.team as unknown) ??
+      (Array.isArray(parsed) ? parsed : null);
+    if (!Array.isArray(playersRaw)) {
+      throw new Error("AI returned unexpected shape: " + JSON.stringify(parsed).slice(0, 200));
+    }
+    const players = z.array(PlayerOut).min(1).max(5).parse(playersRaw);
+    return { players };
   });
 
 const JudgeInputSchema = z.object({
