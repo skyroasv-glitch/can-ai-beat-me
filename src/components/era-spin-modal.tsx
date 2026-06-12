@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Dices } from "lucide-react";
-import { runEraSpin } from "@/lib/nba-all-time";
+import { runFieldSpin, type NbaDecade, type NbaTeam } from "@/lib/nba-all-time";
 import {
   Dialog,
   DialogContent,
@@ -12,58 +12,57 @@ import {
 interface EraSpinModalProps {
   open: boolean;
   spinKey: number;
+  kind: "team" | "decade";
   slotLabel?: string;
-  mode?: "add" | "reroll";
+  mode?: "spin" | "reroll";
+  fixed?: { team?: NbaTeam | null; decade?: NbaDecade | null };
   excludePlayerIds?: string[];
-  onComplete: (team: string, decade: string) => void;
+  onComplete: (value: string) => void;
   onOpenChange: (open: boolean) => void;
 }
 
 export function EraSpinModal({
   open,
   spinKey,
+  kind,
   slotLabel,
-  mode = "add",
+  mode = "spin",
+  fixed = {},
   excludePlayerIds = [],
   onComplete,
   onOpenChange,
 }: EraSpinModalProps) {
-  const [team, setTeam] = useState("...");
-  const [decade, setDecade] = useState("...");
+  const [value, setValue] = useState("...");
   const [spinning, setSpinning] = useState(false);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
+  const fixedRef = useRef(fixed);
+  fixedRef.current = fixed;
   const excludeRef = useRef(excludePlayerIds);
   excludeRef.current = excludePlayerIds;
 
   useEffect(() => {
     if (!open) return;
-
     setSpinning(true);
-    setTeam("...");
-    setDecade("...");
-
+    setValue("...");
     let cancelled = false;
 
-    void runEraSpin(
-      (t, d) => {
-        if (!cancelled) {
-          setTeam(t);
-          setDecade(d);
-        }
-      },
-      2000,
+    void runFieldSpin(
+      kind,
+      (v) => { if (!cancelled) setValue(v); },
+      1500,
+      fixedRef.current,
       excludeRef.current
     ).then((result) => {
       if (cancelled) return;
       setSpinning(false);
-      onCompleteRef.current(result.team, result.decade);
+      onCompleteRef.current(result);
     });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [open, spinKey]);
+    return () => { cancelled = true; };
+  }, [open, spinKey, kind]);
+
+  const label = kind === "team" ? "Team" : "Decade";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -71,12 +70,12 @@ export function EraSpinModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Dices className="h-5 w-5 text-cyan" />
-            {mode === "reroll" ? "Era Reroll" : "Era Spin"}
+            {mode === "reroll" ? `${label} Reroll` : `Spinning ${label}`}
           </DialogTitle>
           <DialogDescription>
             {mode === "reroll"
-              ? `One reroll for ${slotLabel ?? "this slot"} — spinning a new team and decade...`
-              : `Spinning a team and decade for ${slotLabel ?? "your next slot"}...`}
+              ? `Spinning a new ${label.toLowerCase()} for ${slotLabel ?? "this slot"}...`
+              : `Spinning a ${label.toLowerCase()} for ${slotLabel ?? "your slot"}...`}
           </DialogDescription>
         </DialogHeader>
 
@@ -84,23 +83,11 @@ export function EraSpinModal({
           {slotLabel && (
             <div className="rounded-xl border border-cyan/30 bg-cyan/5 px-4 py-3 text-center">
               <p className="text-lg font-bold text-foreground">{slotLabel}</p>
-              <p className="text-xs text-muted-foreground">Then pick a player from this era</p>
             </div>
           )}
-
-          <div className={`grid grid-cols-2 gap-3 ${spinning ? "animate-pulse" : ""}`}>
-            <div className="rounded-xl border border-border bg-background px-3 py-4 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Team
-              </p>
-              <p className="mt-1 text-sm font-bold text-foreground">{team}</p>
-            </div>
-            <div className="rounded-xl border border-border bg-background px-3 py-4 text-center">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Decade
-              </p>
-              <p className="mt-1 text-sm font-bold text-cyan">{decade}</p>
-            </div>
+          <div className={`rounded-xl border border-border bg-background px-3 py-5 text-center ${spinning ? "animate-pulse" : ""}`}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+            <p className="mt-1 text-lg font-bold text-cyan">{value}</p>
           </div>
         </div>
       </DialogContent>
