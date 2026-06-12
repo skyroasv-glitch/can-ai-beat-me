@@ -136,6 +136,48 @@ export function spinEraWithAvailablePlayers(excludePlayerIds: string[] = []): {
   return pickRandom(combos);
 }
 
+export function spinField(
+  kind: "team" | "decade",
+  fixed: { team?: NbaTeam | null; decade?: NbaDecade | null } = {},
+  excludePlayerIds: string[] = []
+): NbaTeam | NbaDecade {
+  const combos = getAvailableEraCombos(excludePlayerIds);
+  let pool = combos;
+  if (kind === "team" && fixed.decade) pool = pool.filter((c) => c.decade === fixed.decade);
+  if (kind === "decade" && fixed.team) pool = pool.filter((c) => c.team === fixed.team);
+  if (pool.length === 0) {
+    return kind === "team" ? pickRandom(NBA_TEAMS) : pickRandom(NBA_DECADES);
+  }
+  const choice = pickRandom(pool);
+  return kind === "team" ? choice.team : choice.decade;
+}
+
+export function runFieldSpin(
+  kind: "team" | "decade",
+  onTick: (value: string) => void,
+  durationMs = 1500,
+  fixed: { team?: NbaTeam | null; decade?: NbaDecade | null } = {},
+  excludePlayerIds: string[] = []
+): Promise<NbaTeam | NbaDecade> {
+  const final = spinField(kind, fixed, excludePlayerIds);
+  const start = Date.now();
+  return new Promise((resolve) => {
+    const tick = () => {
+      const elapsed = Date.now() - start;
+      if (elapsed >= durationMs) {
+        onTick(final);
+        resolve(final);
+        return;
+      }
+      const r = spinField(kind, fixed, excludePlayerIds);
+      onTick(r);
+      const delay = 60 + Math.floor((elapsed / durationMs) * 120);
+      setTimeout(tick, delay);
+    };
+    tick();
+  });
+}
+
 export function runEraSpin(
   onTick: (team: string, decade: string) => void,
   durationMs = 2000,
@@ -159,6 +201,7 @@ export function runEraSpin(
     tick();
   });
 }
+
 
 export function pickPlayerForEra(
   team: NbaTeam,
