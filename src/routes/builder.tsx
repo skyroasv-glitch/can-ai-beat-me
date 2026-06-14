@@ -22,13 +22,11 @@ import {
   getPlayersForEra,
   pickPlayerForEra,
   playerStatsFrom,
-  inPositionGroup,
   type LineupPlayer,
   type NbaDecade,
   type NbaTeam,
   type PlayerStats,
   type PoolPlayer,
-  type PositionGroup,
 } from "@/lib/nba-all-time";
 import { AppNav } from "@/components/app-nav";
 import { AppFooter } from "@/components/app-footer";
@@ -66,6 +64,7 @@ interface FilledPlayer {
 }
 
 interface UserSlot {
+  position: CourtPosition;
   team: NbaTeam | null;
   decade: NbaDecade | null;
   player: FilledPlayer | null;
@@ -73,14 +72,28 @@ interface UserSlot {
   decadeRerolled: boolean;
 }
 
-const EMPTY_SLOT: UserSlot = {
-  team: null,
-  decade: null,
-  player: null,
-  teamRerolled: false,
-  decadeRerolled: false,
+type CourtPosition = "PG" | "SG" | "SF" | "PF" | "C";
+const COURT_POSITIONS: CourtPosition[] = ["PG", "SG", "SF", "PF", "C"];
+const POSITION_NAMES: Record<CourtPosition, string> = {
+  PG: "Point Guard",
+  SG: "Shooting Guard",
+  SF: "Small Forward",
+  PF: "Power Forward",
+  C: "Center",
 };
-const EMPTY_SLOTS: UserSlot[] = Array.from({ length: 5 }, () => ({ ...EMPTY_SLOT }));
+
+function emptySlot(position: CourtPosition): UserSlot {
+  return { position, team: null, decade: null, player: null, teamRerolled: false, decadeRerolled: false };
+}
+
+const EMPTY_SLOTS: UserSlot[] = COURT_POSITIONS.map(emptySlot);
+
+function canPlayPosition(playerPosition: string, slotPosition: CourtPosition): boolean {
+  if (playerPosition === slotPosition) return true;
+  if (playerPosition === "G") return slotPosition === "PG" || slotPosition === "SG";
+  if (playerPosition === "F") return slotPosition === "SF" || slotPosition === "PF";
+  return false;
+}
 
 function isFilled(s: UserSlot): boolean {
   return !!(s.team && s.decade && s.player);
@@ -91,7 +104,7 @@ function slotToLineupPlayer(slot: UserSlot): LineupPlayer | null {
   return {
     id: slot.player.id,
     name: slot.player.name,
-    position: slot.player.position,
+    position: slot.position,
     team: slot.team,
     decade: slot.decade,
     stats: slot.player.stats,
@@ -202,7 +215,6 @@ function LineupBuilderPage() {
   const [generating, setGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [posFilter, setPosFilter] = useState<"All" | PositionGroup>("All");
   const [sortKey, setSortKey] = useState<SortKey>("impact");
   const [activePickSlot, setActivePickSlot] = useState<number | null>(null);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
@@ -242,13 +254,13 @@ function LineupBuilderPage() {
   const available = useMemo(() => {
     if (!pickingSlot || !pickingSlot.team || !pickingSlot.decade) return [];
     let pool = getPlayersForEra(pickingSlot.team, pickingSlot.decade, usedPlayerIds);
-    if (posFilter !== "All") pool = pool.filter((p) => inPositionGroup(p.pos, posFilter));
+    pool = pool.filter((p) => canPlayPosition(p.pos, pickingSlot.position));
     const q = search.toLowerCase().trim();
     if (q) {
       pool = pool.filter((p) => p.name.toLowerCase().includes(q) || p.pos.toLowerCase().includes(q));
     }
     return [...pool].sort((a, b) => b[sortKey] - a[sortKey]);
-  }, [pickingSlot, search, usedPlayerIds, posFilter, sortKey]);
+  }, [pickingSlot, search, usedPlayerIds, sortKey]);
 
   const clearResults = () => {
     setAiLineup(null);
@@ -348,7 +360,7 @@ function LineupBuilderPage() {
   );
 
   const clearSlot = (slotIndex: number) => {
-    setSlots((prev) => prev.map((s, i) => (i === slotIndex ? { ...EMPTY_SLOT } : s)));
+    setSlots((prev) => prev.map((s, i) => (i === slotIndex ? emptySlot(s.position) : s)));
     if (activePickSlot === slotIndex) {
       setActivePickSlot(null);
       setSearch("");
@@ -364,7 +376,7 @@ function LineupBuilderPage() {
   };
 
   const playAgain = () => {
-    setSlots(EMPTY_SLOTS.map((s) => ({ ...s })));
+    setSlots(COURT_POSITIONS.map(emptySlot));
     setAiLineup(null);
     setGenerating(false);
     setAiError(null);
