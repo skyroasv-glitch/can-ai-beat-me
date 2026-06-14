@@ -518,7 +518,7 @@ function LineupBuilderPage() {
                   <span className="rounded-full bg-cyan px-3 py-1 text-xs font-bold text-primary-foreground">
                     {pickingSlot.team}
                   </span>
-                  <span className="rounded-full bg-orange-500/80 px-3 py-1 text-xs font-bold text-white">
+                  <span className="rounded-full bg-cyan/15 px-3 py-1 text-xs font-bold text-cyan">
                     {pickingSlot.decade}
                   </span>
                   <span className="ml-auto text-xs font-semibold text-muted-foreground">
