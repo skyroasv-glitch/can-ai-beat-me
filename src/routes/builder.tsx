@@ -465,7 +465,7 @@ function LineupBuilderPage() {
     : {};
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-background">
+    <div className="relative flex min-h-dvh flex-col bg-background">
       <AppNav showBack subtitle="All-Time NBA" />
 
       <EraSpinModal
@@ -483,32 +483,37 @@ function LineupBuilderPage() {
       />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
-        <section className="mb-6 rounded-2xl border border-cyan/20 bg-cyan/5 px-4 py-4 sm:mb-8 sm:px-6 sm:py-5">
-          <div className="flex items-start gap-3">
-            <Dices className="mt-0.5 h-5 w-5 shrink-0 text-cyan" />
-            <div>
-              <h2 className="text-sm font-bold text-foreground sm:text-base">All-Time NBA Legends</h2>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+        <section className="mb-6 flex flex-col gap-5 border-b border-border pb-6 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-1 text-xs font-bold uppercase tracking-[0.2em] text-cyan">NBA Lineup Builder // Human vs. Machine</p>
+            <h1 className="font-display text-5xl uppercase leading-none tracking-wide text-foreground sm:text-7xl">Build your <span className="text-cyan">starting five</span></h1>
+            <div className="mt-3 flex items-start gap-2">
+              <Dices className="mt-0.5 h-4 w-4 shrink-0 text-cyan" />
+              <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
                 For each slot, spin a Team and a Decade independently. Then pick a legend who played
                 for that team in that era. One reroll per field. Then the AI counters.
               </p>
             </div>
           </div>
+          <div className="shrink-0 border-l-4 border-cyan bg-surface px-4 py-2">
+            <span className="block text-[10px] font-bold uppercase tracking-widest text-cyan">Current difficulty</span>
+            <span className="font-display text-2xl uppercase tracking-wide">Hall of Fame</span>
+          </div>
         </section>
 
-        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+        <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1.15fr_.85fr]">
           {/* Your Lineup */}
-          <section className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
+          <section className="rounded-lg border border-border bg-surface p-4 sm:p-6">
             <div className="mb-4 flex items-center gap-2">
               <User className="h-5 w-5 text-cyan" />
-              <h2 className="text-base font-bold text-foreground sm:text-lg">Your Lineup</h2>
+              <h2 className="font-display text-2xl uppercase tracking-wide text-foreground">Your Starting Five</h2>
               <span className="ml-auto rounded-md bg-cyan/10 px-2 py-0.5 text-xs font-bold text-cyan">
                 {myLineup.length}/5 slots
               </span>
             </div>
 
             {pickingSlot && pickingSlot.team && pickingSlot.decade && (
-              <div ref={dropdownRef} className="mb-4 rounded-xl border border-cyan/30 bg-background/50 p-3 sm:p-4">
+              <div ref={dropdownRef} className="mb-4 rounded-md border border-cyan/30 bg-background/50 p-3 sm:p-4">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-cyan px-3 py-1 text-xs font-bold text-primary-foreground">
                     {pickingSlot.team}
@@ -603,9 +608,9 @@ function LineupBuilderPage() {
                 return (
                   <div
                     key={i}
-                    className={`animate-fade-in rounded-xl border px-3 py-3 sm:px-4 ${
+                    className={`animate-fade-in rounded-md border-l-4 px-3 py-3 sm:px-4 ${
                       filled
-                        ? "border-cyan/30 bg-cyan/5"
+                        ? "border-cyan bg-cyan/5"
                         : slot.team || slot.decade
                         ? "border-cyan/20 bg-cyan/5"
                         : "border-dashed border-border bg-background/40"
@@ -721,10 +726,10 @@ function LineupBuilderPage() {
           </section>
 
           {/* AI Lineup */}
-          <section className="rounded-2xl border border-border bg-surface p-4 sm:p-6">
+          <section className="rounded-lg border border-border bg-surface p-4 sm:p-6">
             <div className="mb-4 flex items-center gap-2">
               <Bot className="h-5 w-5 text-cyan" />
-              <h2 className="text-base font-bold text-foreground sm:text-lg">AI Lineup</h2>
+              <h2 className="font-display text-2xl uppercase tracking-wide text-foreground">AI Counter-Lineup</h2>
               <span className="ml-auto rounded-md bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">
                 {aiLineup ? "5/5" : "0/5"}
               </span>
@@ -800,7 +805,7 @@ function LineupBuilderPage() {
           <button
             onClick={() => { void generateAI(); }}
             disabled={!lineupComplete || generating || !!spin}
-            className="w-full rounded-xl bg-cyan py-3.5 text-sm font-bold text-primary-foreground transition-all duration-200 hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 sm:py-4 sm:text-base"
+            className="w-full rounded-md bg-cyan py-3.5 text-sm font-bold uppercase tracking-widest text-primary-foreground transition-all duration-200 hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 sm:py-4 sm:text-base"
           >
             {generating ? (
               <span className="flex items-center justify-center gap-2">
@@ -829,11 +834,11 @@ function LineupBuilderPage() {
 
         {/* Results */}
         {slotComparisons && (
-          <section className="animate-fade-in mt-8 rounded-2xl border border-border bg-surface p-4 sm:mt-10 sm:p-6">
+          <section className="animate-fade-in mt-8 rounded-lg border border-border bg-surface p-4 sm:mt-10 sm:p-6">
             <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <div className="flex items-center gap-2">
                 <Swords className="h-5 w-5 shrink-0 text-cyan" />
-                <h2 className="text-base font-bold text-foreground sm:text-lg">Head-to-Head Results</h2>
+                <h2 className="font-display text-2xl uppercase tracking-wide text-foreground">Head-to-Head Results</h2>
               </div>
               <div className="flex items-center gap-3 text-sm sm:ml-auto">
                 <span className="rounded-md bg-cyan/10 px-2.5 py-1 font-bold text-cyan">You {userSlotWins}</span>
