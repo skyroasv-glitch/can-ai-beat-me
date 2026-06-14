@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Trophy, BrainCircuit, ArrowRight, Lock, Zap } from "lucide-react";
+import { Trophy, BrainCircuit, ArrowRight, Lock, Zap, BarChart3, Dices } from "lucide-react";
 import { AppNav } from "@/components/app-nav";
 import { AppFooter } from "@/components/app-footer";
 
@@ -16,165 +15,54 @@ export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
-type Sport = "nba" | "nfl" | "mlb";
-
 function HomePage() {
-  const [selectedSport, setSelectedSport] = useState<Sport>("nba");
-
   return (
-    <div className="relative flex min-h-screen flex-col bg-background">
-      {/* Ambient background glow */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div
-          className="absolute -left-1/4 -top-1/4 h-[600px] w-[600px] rounded-full opacity-20 blur-[120px]"
-          style={{ background: "radial-gradient(circle, oklch(0.82 0.2 195) 0%, transparent 70%)" }}
-        />
-        <div
-          className="absolute -bottom-1/4 -right-1/4 h-[500px] w-[500px] rounded-full opacity-10 blur-[100px]"
-          style={{ background: "radial-gradient(circle, oklch(0.82 0.2 195) 0%, transparent 70%)" }}
-        />
-      </div>
-
+    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-background">
       <AppNav />
-
-      {/* Hero content */}
-      <div className="relative z-10 mx-auto flex flex-1 flex-col items-center justify-center px-4 py-12 sm:py-20">
-      <div className="max-w-3xl text-center">
-        {/* Badge */}
-        <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-cyan/20 bg-cyan/5 px-4 py-1.5 text-xs font-medium text-cyan">
-          <BrainCircuit className="h-3.5 w-3.5" />
-          <span>Human vs. Machine</span>
-        </div>
-
-        {/* Title */}
-        <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-6xl md:text-7xl">
-          Can AI{" "}
-          <span className="text-cyan text-glow">Beat</span>{" "}
-          Me?
-        </h1>
-
-        {/* Subtitle */}
-        <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted-foreground sm:mt-6 sm:text-xl">
-          Spin for a team and decade, pick a legend from that era, then let AI
-          try to top your lineup.
-        </p>
-
-        {/* Sport Selector */}
-        <div className="mt-8 sm:mt-12">
-          <p className="mb-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
-            Choose your sport
-          </p>
-          <div className="flex flex-wrap items-stretch justify-center gap-3 sm:gap-4">
-            <SportCard
-              id="nba"
-              name="NBA"
-              icon={<Trophy className="h-6 w-6" />}
-              selected={selectedSport === "nba"}
-              onSelect={() => setSelectedSport("nba")}
-              status="available"
-            />
-            <SportCard
-              id="nfl"
-              name="NFL"
-              icon={<Zap className="h-6 w-6" />}
-              selected={selectedSport === "nfl"}
-              onSelect={() => setSelectedSport("nfl")}
-              status="coming-soon"
-            />
-            <SportCard
-              id="mlb"
-              name="MLB"
-              icon={<Zap className="h-6 w-6" />}
-              selected={selectedSport === "mlb"}
-              onSelect={() => setSelectedSport("mlb")}
-              status="coming-soon"
-            />
+      <div className="pointer-events-none absolute inset-0 broadcast-grid opacity-30" />
+      <main className="relative z-10 mx-auto grid w-full max-w-7xl flex-1 items-center gap-12 px-4 py-10 sm:px-6 lg:grid-cols-[1.15fr_.85fr] lg:py-16">
+        <section>
+          <div className="mb-6 inline-flex items-center gap-2 border-l-4 border-cyan bg-surface px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-cyan">
+            <BrainCircuit className="h-4 w-4" /> Human vs. Machine
           </div>
-        </div>
-
-        {/* Start Button */}
-        <div className="mt-10">
-          {selectedSport === "nba" ? (
+          <h1 className="max-w-4xl font-display text-7xl uppercase leading-[.86] tracking-wide text-foreground sm:text-8xl lg:text-[8rem]">
+            Build your five.<br /><span className="text-cyan">Beat the machine.</span>
+          </h1>
+          <p className="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
+            Spin a franchise and decade independently. Draft the best player from that era. Make the AI answer your lineup.
+          </p>
+          <div className="mt-9 flex flex-wrap items-center gap-4">
             <Link
               to="/builder"
-              className="group inline-flex items-center justify-center gap-2 rounded-xl bg-cyan px-8 py-4 text-base font-bold text-primary-foreground transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
+              className="group inline-flex min-h-14 items-center justify-center gap-3 rounded-md bg-cyan px-8 text-sm font-bold uppercase tracking-widest text-primary-foreground transition-transform hover:-translate-y-0.5"
             >
-              Start Building
+              Enter Draft Room
               <ArrowRight className="h-5 w-5 transition-transform duration-200 group-hover:translate-x-1" />
             </Link>
-          ) : (
-            <button
-              type="button"
-              disabled
-              aria-disabled="true"
-              className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-cyan/40 px-8 py-4 text-base font-bold text-primary-foreground opacity-70"
-            >
-              Coming Soon
-              <Lock className="h-5 w-5" />
-            </button>
-          )}
-        </div>
+            <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">NBA · All eras · 5 slots</span>
+          </div>
+        </section>
 
-        {/* Footer hint */}
-        <p className="mt-8 text-xs text-muted-foreground">
-          Pick NBA to spin up your all-time lineup now.
-        </p>
-      </div>
-      </div>
-
+        <section className="border border-border bg-surface p-5 shadow-2xl sm:p-7" aria-label="Game overview">
+          <div className="flex items-end justify-between border-b border-border pb-5">
+            <div><p className="text-xs font-bold uppercase tracking-widest text-cyan">Live format</p><h2 className="font-display text-4xl uppercase tracking-wide">All-time NBA draft</h2></div>
+            <Trophy className="h-9 w-9 text-cyan" />
+          </div>
+          <div className="grid gap-px bg-border sm:grid-cols-3">
+            {[{ icon: Dices, n: "01", title: "Spin", copy: "Roll team and decade separately." }, { icon: BarChart3, n: "02", title: "Scout", copy: "Compare era stats and impact." }, { icon: BrainCircuit, n: "03", title: "Battle", copy: "Generate the AI counter-lineup." }].map(({ icon: Icon, n, title, copy }) => (
+              <div key={n} className="bg-surface px-4 py-7">
+                <div className="mb-7 flex items-center justify-between"><Icon className="h-5 w-5 text-cyan" /><span className="font-display text-2xl text-muted-foreground">{n}</span></div>
+                <h3 className="font-display text-3xl uppercase tracking-wide">{title}</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{copy}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 flex items-center justify-between bg-background px-4 py-4">
+            <div><p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Scoring model</p><p className="text-sm font-semibold">Weighted box-score impact</p></div>
+            <div className="flex gap-2"><span className="rounded-sm bg-cyan px-2 py-1 text-xs font-bold text-primary-foreground">NBA LIVE</span><span className="inline-flex items-center gap-1 text-xs font-bold text-muted-foreground"><Lock className="h-3 w-3" /> NFL / MLB SOON</span></div>
+          </div>
+        </section>
+      </main>
       <AppFooter />
     </div>
-  );
-}
-
-function SportCard({
-  id,
-  name,
-  icon,
-  selected,
-  onSelect,
-  status,
-}: {
-  id: Sport;
-  name: string;
-  icon: React.ReactNode;
-  selected: boolean;
-  onSelect: () => void;
-  status: "available" | "coming-soon";
-}) {
-  return (
-    <button
-      onClick={onSelect}
-      disabled={status === "coming-soon"}
-      className={`relative flex w-[calc(50%-0.375rem)] min-w-[7.5rem] flex-col items-center gap-3 rounded-2xl border px-4 py-5 transition-all duration-200 sm:w-auto sm:min-w-0 sm:px-8 sm:py-6 ${
-        status === "coming-soon"
-          ? "cursor-not-allowed opacity-50"
-          : "cursor-pointer hover:bg-surface-raised"
-      } ${
-        selected
-          ? "border-cyan bg-cyan/5 glow-active"
-          : "border-border bg-surface"
-      }`}
-    >
-      {status === "coming-soon" && (
-        <span className="absolute -top-2.5 rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Coming Soon
-        </span>
-      )}
-      <div
-        className={`flex h-12 w-12 items-center justify-center rounded-xl ${
-          selected ? "text-cyan" : "text-muted-foreground"
-        }`}
-      >
-        {icon}
-      </div>
-      <span
-        className={`text-sm font-semibold ${
-          selected ? "text-foreground" : "text-muted-foreground"
-        }`}
-      >
-        {name}
-      </span>
-    </button>
   );
 }

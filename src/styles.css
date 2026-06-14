@@ -55,30 +55,30 @@
 }
 
 :root {
-  --radius: 0.75rem;
-  --font-display: "Inter", sans-serif;
-  --font-body: "Inter", sans-serif;
+  --radius: 0.45rem;
+  --font-display: "Bebas Neue", sans-serif;
+  --font-body: "Barlow", sans-serif;
 
-  --background: oklch(0.08 0.01 270);
-  --foreground: oklch(0.97 0.005 270);
-  --card: oklch(0.1 0.015 270);
+  --background: oklch(0.11 0.008 45);
+  --foreground: oklch(0.95 0.012 75);
+  --card: oklch(0.18 0.018 45);
   --card-foreground: oklch(0.97 0.005 270);
   --popover: oklch(0.1 0.015 270);
   --popover-foreground: oklch(0.97 0.005 270);
-  --primary: oklch(0.75 0.18 195);
-  --primary-foreground: oklch(0.08 0.01 270);
-  --secondary: oklch(0.14 0.015 270);
+  --primary: oklch(0.68 0.19 38);
+  --primary-foreground: oklch(0.11 0.008 45);
+  --secondary: oklch(0.2 0.018 45);
   --secondary-foreground: oklch(0.97 0.005 270);
-  --muted: oklch(0.18 0.01 270);
-  --muted-foreground: oklch(0.6 0.02 270);
-  --accent: oklch(0.75 0.18 195);
-  --accent-foreground: oklch(0.08 0.01 270);
+  --muted: oklch(0.24 0.015 45);
+  --muted-foreground: oklch(0.68 0.02 65);
+  --accent: oklch(0.68 0.19 38);
+  --accent-foreground: oklch(0.11 0.008 45);
   --destructive: oklch(0.6 0.2 25);
   --destructive-foreground: oklch(0.97 0.005 270);
   --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 10%);
-  --ring: oklch(0.75 0.18 195);
-  --chart-1: oklch(0.75 0.18 195);
+  --ring: oklch(0.68 0.19 38);
+  --chart-1: oklch(0.68 0.19 38);
   --chart-2: oklch(0.65 0.15 160);
   --chart-3: oklch(0.55 0.12 250);
   --chart-4: oklch(0.85 0.18 80);
@@ -92,10 +92,10 @@
   --sidebar-border: oklch(1 0 0 / 8%);
   --sidebar-ring: oklch(0.75 0.18 195);
 
-  --cyan: oklch(0.82 0.2 195);
-  --cyan-glow: oklch(0.82 0.2 195 / 0.4);
-  --surface: oklch(0.12 0.015 270);
-  --surface-raised: oklch(0.16 0.018 270);
+  --cyan: oklch(0.68 0.19 38);
+  --cyan-glow: oklch(0.68 0.19 38 / 0.35);
+  --surface: oklch(0.18 0.018 45);
+  --surface-raised: oklch(0.22 0.02 45);
   --glass: oklch(1 0 0 / 4%);
 }
 
@@ -149,7 +149,18 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-body);
+    min-width: 320px;
   }
+
+  button, a, input, select { outline-offset: 3px; }
+  :focus-visible { outline: 2px solid var(--color-ring); }
+}
+
+@utility font-display { font-family: var(--font-display); }
+
+@utility broadcast-grid {
+  background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 48px 48px;
 }
 
 @utility text-glow {
@@ -183,4 +194,13 @@
 
 @utility animate-fade-in {
   animation: fade-in-up 0.45s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
