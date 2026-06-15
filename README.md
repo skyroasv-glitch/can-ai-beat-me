@@ -128,12 +128,6 @@ bun run build
 
 ---
 
-## YouTube
-
-This project is part of the **[justjordanfr](https://youtube.com/@justjordanfr)** YouTube channel — *Can AI Beat Me?* — where AI and human compete across sports, games, and challenges.
-
----
-
 ## License
 
 MIT
