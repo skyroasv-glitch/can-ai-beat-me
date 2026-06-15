@@ -80,11 +80,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "CanAIBeatMe — Build Your Lineup, Face the AI" },
       { name: "description", content: "Build your fantasy sports lineup, then let AI try to beat it. Test your strategy against machine intelligence." },
       { name: "author", content: "CanAIBeatMe" },
-      { property: "og:title", content: "CanAIBeatMe" },
-      { property: "og:description", content: "Build your fantasy sports lineup, then let AI try to beat it." },
+      { property: "og:title", content: "CanAIBeatMe — Build Your Lineup, Face the AI" },
+      { property: "og:description", content: "Build your fantasy sports lineup, then let AI try to beat it. Test your strategy against machine intelligence." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@CanAIBeatMe" },
+      { name: "twitter:title", content: "CanAIBeatMe — Build Your Lineup, Face the AI" },
+      { name: "twitter:description", content: "Build your fantasy sports lineup, then let AI try to beat it. Test your strategy against machine intelligence." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/aea0a4ae-a712-4002-9e76-bf9054bfef31/id-preview-c503878d--98098762-4fe8-4ca9-b2e5-9d8c0e4ae3f8.lovable.app-1781483240262.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/aea0a4ae-a712-4002-9e76-bf9054bfef31/id-preview-c503878d--98098762-4fe8-4ca9-b2e5-9d8c0e4ae3f8.lovable.app-1781483240262.png" },
     ],
     links: [
       {
