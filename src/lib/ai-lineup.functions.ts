@@ -75,12 +75,16 @@ function parseAIJson(content: string): unknown {
 export const generateAILineup = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => InputSchema.parse(data))
   .handler(async ({ data }) => {
+    const positions = data.players.map((p) => p.position);
     const systemPrompt =
-      "You are an expert NBA historian and analyst. The user is building an all-time NBA fantasy lineup. Each player is assigned a random NBA team and decade era via a spin. Build a competing 5-player all-time lineup optimized to beat theirs. Pick legendary players only. For each player you pick, give one sentence of reasoning. Format your response as JSON with fields: players (array of objects with name, position, reasoning).";
+      "You are an expert NBA historian and analyst running a head-to-head all-time NBA matchup. The user has built a 5-player lineup with one player at each of PG, SG, SF, PF, and C. You must build a COUNTER lineup with EXACTLY one player at each of the same five positions, in the same order: PG, SG, SF, PF, C. For each user player, pick a specific all-time great at the SAME position who would directly beat that user player in a head-to-head matchup (considering size, era, skill, and the team/decade context they were spun onto). Pick legendary players only. Do not repeat players across the lineup. For each pick, give one sentence of reasoning that explicitly references which user player they are matched up against and why they win that matchup. Respond as JSON: { players: [{ name, position, reasoning }] } with exactly 5 entries ordered PG, SG, SF, PF, C.";
 
-    const userPrompt = `Challenge: ${data.context}\n\nUser's lineup:\n${data.players
-      .map((p, i) => `${i + 1}. ${p.name} (${p.position}) — ${p.team}, ${p.decade}`)
-      .join("\n")}\n\nBuild a competing 5-player all-time NBA lineup to beat this one. Return JSON only.`;
+    const userPrompt = `Challenge: ${data.context}\n\nUser's lineup (matchup target for each position):\n${data.players
+      .map(
+        (p, i) =>
+          `${i + 1}. ${p.position} — ${p.name} (${p.team}, ${p.decade}). Your ${p.position} must beat this player in a head-to-head matchup.`
+      )
+      .join("\n")}\n\nReturn JSON only. Positions in your "players" array must be exactly: ${positions.join(", ")}.`;
 
     const content = await callAIGateway(systemPrompt, userPrompt);
     const parsed = parseAIJson(content) as Record<string, unknown>;
@@ -98,8 +102,20 @@ export const generateAILineup = createServerFn({ method: "POST" })
     if (!Array.isArray(playersRaw)) {
       throw new Error("AI returned unexpected shape: " + JSON.stringify(parsed).slice(0, 200));
     }
-    const players = z.array(PlayerOut).min(1).max(5).parse(playersRaw);
-    return { players };
+    const parsedPlayers = z.array(PlayerOut).min(1).max(5).parse(playersRaw);
+
+    // Force position alignment to the user's slot positions (PG, SG, SF, PF, C order).
+    // If the AI returned them out of order, sort by matching position; otherwise overwrite by index.
+    const aligned = positions.map((pos, i) => {
+      const match = parsedPlayers.find(
+        (p, j) => p.position.toUpperCase() === pos && !parsedPlayers.slice(0, j).some((x) => x === p)
+      );
+      const fallback = parsedPlayers[i];
+      const picked = match ?? fallback;
+      return picked ? { ...picked, position: pos } : { name: "Unknown", position: pos, reasoning: "" };
+    });
+
+    return { players: aligned };
   });
 
 const JudgeInputSchema = z.object({
