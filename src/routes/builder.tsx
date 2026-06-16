@@ -15,6 +15,7 @@ import {
   Check,
   Dices,
   RefreshCw,
+  ArrowLeftRight,
 } from "lucide-react";
 import { generateAILineup, judgeLineupWinner } from "@/lib/ai-lineup.functions";
 import {
@@ -30,7 +31,7 @@ import {
 } from "@/lib/nba-all-time";
 import { AppNav } from "@/components/app-nav";
 import { AppFooter } from "@/components/app-footer";
-import { EraSpinModal } from "@/components/era-spin-modal";
+import { EraComboSpinModal } from "@/components/era-combo-spin-modal";
 import { SpinningEraLabel } from "@/components/spinning-era-label";
 
 type SortKey = "impact" | "ppg" | "rpg" | "apg" | "spg" | "bpg";
@@ -44,6 +45,28 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
 ];
 
 const ZERO_STATS: PlayerStats = { ppg: 0, rpg: 0, apg: 0, spg: 0, bpg: 0, impact: 0 };
+
+type CourtPosition = "PG" | "SG" | "SF" | "PF" | "C";
+const COURT_POSITIONS: CourtPosition[] = ["PG", "SG", "SF", "PF", "C"];
+const POSITION_NAMES: Record<CourtPosition, string> = {
+  PG: "Point Guard",
+  SG: "Shooting Guard",
+  SF: "Small Forward",
+  PF: "Power Forward",
+  C: "Center",
+};
+
+function eligiblePositions(pos: string): CourtPosition[] {
+  const parts = pos.split(/[\/\-,]/);
+  const set = new Set<CourtPosition>();
+  for (const raw of parts) {
+    const t = raw.trim().toUpperCase();
+    if (t === "G") { set.add("PG"); set.add("SG"); }
+    else if (t === "F") { set.add("SF"); set.add("PF"); }
+    else if (COURT_POSITIONS.includes(t as CourtPosition)) set.add(t as CourtPosition);
+  }
+  return COURT_POSITIONS.filter((p) => set.has(p));
+}
 
 interface AIPlayer {
   id?: string;
@@ -59,74 +82,43 @@ interface AIPlayer {
 interface FilledPlayer {
   id: string;
   name: string;
-  position: string;
+  rawPosition: string; // raw position from data (could be "F", "G", "C", "PG"...)
   stats: PlayerStats;
+  team: NbaTeam;
+  decade: NbaDecade;
 }
 
-interface UserSlot {
-  position: CourtPosition;
-  team: NbaTeam | null;
-  decade: NbaDecade | null;
-  player: FilledPlayer | null;
-  teamRerolled: boolean;
-  decadeRerolled: boolean;
-}
+type SlotMap = Record<CourtPosition, FilledPlayer | null>;
 
-type CourtPosition = "PG" | "SG" | "SF" | "PF" | "C";
-const COURT_POSITIONS: CourtPosition[] = ["PG", "SG", "SF", "PF", "C"];
-const POSITION_NAMES: Record<CourtPosition, string> = {
-  PG: "Point Guard",
-  SG: "Shooting Guard",
-  SF: "Small Forward",
-  PF: "Power Forward",
-  C: "Center",
-};
+const EMPTY_SLOTS: SlotMap = { PG: null, SG: null, SF: null, PF: null, C: null };
 
-function emptySlot(position: CourtPosition): UserSlot {
-  return { position, team: null, decade: null, player: null, teamRerolled: false, decadeRerolled: false };
-}
-
-const EMPTY_SLOTS: UserSlot[] = COURT_POSITIONS.map(emptySlot);
-
-function canPlayPosition(playerPosition: string, slotPosition: CourtPosition): boolean {
-  if (playerPosition === slotPosition) return true;
-  if (playerPosition === "G") return slotPosition === "PG" || slotPosition === "SG";
-  if (playerPosition === "F") return slotPosition === "SF" || slotPosition === "PF";
-  return false;
-}
-
-function isFilled(s: UserSlot): boolean {
-  return !!(s.team && s.decade && s.player);
-}
-
-function slotToLineupPlayer(slot: UserSlot): LineupPlayer | null {
-  if (!slot.team || !slot.decade || !slot.player) return null;
+function slotToLineupPlayer(pos: CourtPosition, p: FilledPlayer | null): LineupPlayer | null {
+  if (!p) return null;
   return {
-    id: slot.player.id,
-    name: slot.player.name,
-    position: slot.position,
-    team: slot.team,
-    decade: slot.decade,
-    stats: slot.player.stats,
-    rerolled: slot.teamRerolled || slot.decadeRerolled,
+    id: p.id,
+    name: p.name,
+    position: pos,
+    team: p.team,
+    decade: p.decade,
+    stats: p.stats,
   };
 }
 
-function filledPlayerIds(slots: UserSlot[]): string[] {
-  return slots.filter((s) => s.player).map((s) => s.player!.id);
+function filledPlayerIds(slots: SlotMap): string[] {
+  return COURT_POSITIONS.map((c) => slots[c]?.id).filter((x): x is string => !!x);
 }
 
-function isLineupComplete(slots: UserSlot[]): boolean {
-  return slots.every(isFilled);
+function isLineupComplete(slots: SlotMap): boolean {
+  return COURT_POSITIONS.every((p) => !!slots[p]);
 }
 
 export const Route = createFileRoute("/builder")({
   head: () => ({
     meta: [
       { title: "Lineup Builder — CanAIBeatMe" },
-      { name: "description", content: "Spin a team and decade, then pick a legend who played there in that era." },
+      { name: "description", content: "Spin a team and decade, pick a legend, then drop them into a position they played." },
       { property: "og:title", content: "Lineup Builder — CanAIBeatMe" },
-      { property: "og:description", content: "Spin a team and decade, then pick a legend who played there in that era." },
+      { property: "og:description", content: "Spin a team and decade, pick a legend, then drop them into a position they played." },
     ],
   }),
   component: LineupBuilderPage,
@@ -136,6 +128,7 @@ type SlotWinner = "user" | "ai" | "tie";
 
 interface SlotComparison {
   slot: number;
+  position: CourtPosition;
   userName: string;
   aiName: string;
   userEra: string;
@@ -147,14 +140,15 @@ interface SlotComparison {
   winner: SlotWinner;
 }
 
-function compareSlots(slots: UserSlot[], aiLineup: AIPlayer[]): SlotComparison[] {
-  return Array.from({ length: 5 }, (_, i) => {
-    const slot = slots[i];
-    const user = slot ? slotToLineupPlayer(slot) : null;
+function compareSlots(slots: SlotMap, aiLineup: AIPlayer[]): SlotComparison[] {
+  return COURT_POSITIONS.map((pos, i) => {
+    const filled = slots[pos];
+    const user = slotToLineupPlayer(pos, filled);
     const ai = aiLineup[i];
     if (!user || !ai) {
       return {
         slot: i + 1,
+        position: pos,
         userName: user?.name ?? "—",
         aiName: ai?.name ?? "—",
         userEra: user ? `${user.team} · ${user.decade}` : "—",
@@ -175,6 +169,7 @@ function compareSlots(slots: UserSlot[], aiLineup: AIPlayer[]): SlotComparison[]
     else if (aiScore > userScore) winner = "ai";
     return {
       slot: i + 1,
+      position: pos,
       userName: user.name,
       aiName: ai.name,
       userEra: `${user.team} · ${user.decade}`,
@@ -203,64 +198,60 @@ function Stat({ label, value, hl }: { label: string; value: number; hl?: boolean
   );
 }
 
-interface SpinState {
-  slotIndex: number;
-  kind: "team" | "decade";
-  mode: "spin" | "reroll";
+interface CurrentEra {
+  team: NbaTeam;
+  decade: NbaDecade;
 }
 
 function LineupBuilderPage() {
-  const [slots, setSlots] = useState<UserSlot[]>(EMPTY_SLOTS);
+  const [slots, setSlots] = useState<SlotMap>(EMPTY_SLOTS);
+  const [currentEra, setCurrentEra] = useState<CurrentEra | null>(null);
+  const [pendingPlayer, setPendingPlayer] = useState<{ player: PoolPlayer; team: NbaTeam; decade: NbaDecade; positions: CourtPosition[] } | null>(null);
+  const [moveFrom, setMoveFrom] = useState<CourtPosition | null>(null);
   const [aiLineup, setAiLineup] = useState<AIPlayer[] | null>(null);
   const [generating, setGenerating] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("impact");
-  const [activePickSlot, setActivePickSlot] = useState<number | null>(null);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [judging, setJudging] = useState(false);
   const [verdictError, setVerdictError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [spin, setSpin] = useState<SpinState | null>(null);
+  const [spinning, setSpinning] = useState(false);
   const [spinKey, setSpinKey] = useState(0);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const myLineup = useMemo(
-    () => slots.map(slotToLineupPlayer).filter((p): p is LineupPlayer => p !== null),
+    () => COURT_POSITIONS.map((pos) => slotToLineupPlayer(pos, slots[pos])).filter((p): p is LineupPlayer => p !== null),
     [slots]
   );
   const lineupComplete = isLineupComplete(slots);
   const usedPlayerIds = useMemo(() => filledPlayerIds(slots), [slots]);
+  const emptyPositions = useMemo(() => COURT_POSITIONS.filter((p) => !slots[p]), [slots]);
   const callGenerate = useServerFn(generateAILineup);
   const callJudge = useServerFn(judgeLineupWinner);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        if (activePickSlot !== null) setActivePickSlot(null);
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        // no-op; keep era picker open while present
       }
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
-  }, [activePickSlot]);
-
-  // The slot ready for player picking (both team+decade set, no player yet) or the explicitly active one
-  const pickingSlotIdx =
-    activePickSlot !== null && slots[activePickSlot] && !slots[activePickSlot].player
-      ? activePickSlot
-      : slots.findIndex((s) => s.team && s.decade && !s.player);
-  const pickingSlot = pickingSlotIdx >= 0 ? slots[pickingSlotIdx] : null;
+  }, []);
 
   const available = useMemo(() => {
-    if (!pickingSlot || !pickingSlot.team || !pickingSlot.decade) return [];
-    let pool = getPlayersForEra(pickingSlot.team, pickingSlot.decade, usedPlayerIds);
-    pool = pool.filter((p) => canPlayPosition(p.pos, pickingSlot.position));
+    if (!currentEra) return [];
+    let pool = getPlayersForEra(currentEra.team, currentEra.decade, usedPlayerIds);
+    // Only show players who can fill at least one currently-empty position
+    pool = pool.filter((p) => eligiblePositions(p.pos).some((c) => !slots[c]));
     const q = search.toLowerCase().trim();
     if (q) {
       pool = pool.filter((p) => p.name.toLowerCase().includes(q) || p.pos.toLowerCase().includes(q));
     }
     return [...pool].sort((a, b) => b[sortKey] - a[sortKey]);
-  }, [pickingSlot, search, usedPlayerIds, sortKey]);
+  }, [currentEra, search, usedPlayerIds, sortKey, slots]);
 
   const clearResults = () => {
     setAiLineup(null);
@@ -268,125 +259,90 @@ function LineupBuilderPage() {
     setVerdictError(null);
   };
 
-  const startSpin = (slotIndex: number, kind: "team" | "decade", mode: "spin" | "reroll") => {
-    if (spin) return;
-    setSpin({ slotIndex, kind, mode });
+  const startSpin = () => {
+    if (spinning) return;
+    if (lineupComplete) return;
+    setSpinning(true);
     setSpinKey((k) => k + 1);
   };
 
-  const handleSpinComplete = useCallback(
-    (value: string) => {
-      if (!spin) return;
-      const { slotIndex, kind, mode } = spin;
-      setSlots((prev) =>
-        prev.map((s, i) => {
-          if (i !== slotIndex) return s;
-          if (kind === "team") {
-            return {
-              ...s,
-              team: value as NbaTeam,
-              // Rerolling team invalidates current player
-              player: mode === "reroll" ? null : s.player,
-              teamRerolled: mode === "reroll" ? true : s.teamRerolled,
-            };
-          }
-          return {
-            ...s,
-            decade: value as NbaDecade,
-            player: mode === "reroll" ? null : s.player,
-            decadeRerolled: mode === "reroll" ? true : s.decadeRerolled,
-          };
-        })
-      );
-      setSpin(null);
-      setActivePickSlot(slotIndex);
-      setSearch("");
-      clearResults();
-    },
-    [spin]
-  );
+  const handleSpinComplete = useCallback((team: NbaTeam, decade: NbaDecade) => {
+    setCurrentEra({ team, decade });
+    setSpinning(false);
+    setSearch("");
+    clearResults();
+  }, []);
 
-  const pickPlayerForSlot = (slotIndex: number, player: PoolPlayer) => {
-    const slot = slots[slotIndex];
-    if (!slot?.team || !slot?.decade) return;
-    setSlots((prev) =>
-      prev.map((s, i) =>
-        i === slotIndex
-          ? {
-              ...s,
-              player: {
-                id: player.id,
-                name: player.name,
-                position: player.position,
-                stats: playerStatsFrom(player),
-              },
-            }
-          : s
-      )
-    );
-    setActivePickSlot(null);
+  const rerollEra = () => {
+    if (spinning) return;
+    setCurrentEra(null);
+    setPendingPlayer(null);
+    setSpinning(true);
+    setSpinKey((k) => k + 1);
+  };
+
+  const handlePlayerClick = (p: PoolPlayer) => {
+    if (!currentEra) return;
+    const eligibles = eligiblePositions(p.pos);
+    const openSlots = eligibles.filter((c) => !slots[c]);
+    if (openSlots.length === 0) return;
+    if (openSlots.length === 1) {
+      assignPlayerToPosition(p, currentEra, openSlots[0]!);
+      return;
+    }
+    setPendingPlayer({ player: p, team: currentEra.team, decade: currentEra.decade, positions: openSlots });
+  };
+
+  const assignPlayerToPosition = (
+    p: PoolPlayer,
+    era: CurrentEra,
+    pos: CourtPosition
+  ) => {
+    setSlots((prev) => ({
+      ...prev,
+      [pos]: {
+        id: p.id,
+        name: p.name,
+        rawPosition: p.pos,
+        stats: playerStatsFrom(p),
+        team: era.team,
+        decade: era.decade,
+      },
+    }));
+    setPendingPlayer(null);
+    setCurrentEra(null);
     setSearch("");
     clearResults();
   };
 
-  const revealAiEra = useCallback(
-    (index: number, team: NbaTeam, decade: NbaDecade) => {
-      setAiLineup((prev) => {
-        if (!prev) return prev;
-        const exclude = new Set(usedPlayerIds);
-        prev.forEach((p) => { if (p.id) exclude.add(p.id); });
-        const suggested = prev[index];
-        const picked = pickPlayerForEra(team, decade, [...exclude], suggested?.name);
-        if (!picked) {
-          return prev.map((p, i) => (i === index ? { ...p, team, decade, eraRevealed: true } : p));
-        }
-        return prev.map((p, i) =>
-          i === index
-            ? {
-                ...p,
-                id: picked.id,
-                name: picked.name,
-                position: picked.position,
-                team,
-                decade,
-                stats: playerStatsFrom(picked),
-                eraRevealed: true,
-              }
-            : p
-        );
-      });
-    },
-    [usedPlayerIds]
-  );
-
-  const clearSlot = (slotIndex: number) => {
-    setSlots((prev) => prev.map((s, i) => (i === slotIndex ? emptySlot(s.position) : s)));
-    if (activePickSlot === slotIndex) {
-      setActivePickSlot(null);
-      setSearch("");
-    }
-    setAiError(null);
+  const clearSlot = (pos: CourtPosition) => {
+    setSlots((prev) => ({ ...prev, [pos]: null }));
     clearResults();
   };
 
-  const clearPlayer = (slotIndex: number) => {
-    setSlots((prev) => prev.map((s, i) => (i === slotIndex ? { ...s, player: null } : s)));
-    setActivePickSlot(slotIndex);
+  const movePlayer = (from: CourtPosition, to: CourtPosition) => {
+    setSlots((prev) => {
+      if (!prev[from] || prev[to]) return prev;
+      return { ...prev, [to]: prev[from], [from]: null };
+    });
+    setMoveFrom(null);
     clearResults();
   };
 
   const playAgain = () => {
-    setSlots(COURT_POSITIONS.map(emptySlot));
+    setSlots(EMPTY_SLOTS);
+    setCurrentEra(null);
+    setPendingPlayer(null);
+    setMoveFrom(null);
     setAiLineup(null);
     setGenerating(false);
     setAiError(null);
     setSearch("");
-    setActivePickSlot(null);
     setVerdict(null);
     setJudging(false);
     setVerdictError(null);
     setCopied(false);
-    setSpin(null);
+    setSpinning(false);
   };
 
   const shareResults = async () => {
@@ -431,6 +387,36 @@ function LineupBuilderPage() {
     }
   };
 
+  const revealAiEra = useCallback(
+    (index: number, team: NbaTeam, decade: NbaDecade) => {
+      setAiLineup((prev) => {
+        if (!prev) return prev;
+        const exclude = new Set(usedPlayerIds);
+        prev.forEach((p) => { if (p.id) exclude.add(p.id); });
+        const suggested = prev[index];
+        const picked = pickPlayerForEra(team, decade, [...exclude], suggested?.name);
+        if (!picked) {
+          return prev.map((p, i) => (i === index ? { ...p, team, decade, eraRevealed: true } : p));
+        }
+        return prev.map((p, i) =>
+          i === index
+            ? {
+                ...p,
+                id: picked.id,
+                name: picked.name,
+                position: picked.position,
+                team,
+                decade,
+                stats: playerStatsFrom(picked),
+                eraRevealed: true,
+              }
+            : p
+        );
+      });
+    },
+    [usedPlayerIds]
+  );
+
   const revealWinner = async () => {
     if (!aiLineup || !lineupComplete) return;
     setJudging(true);
@@ -468,28 +454,16 @@ function LineupBuilderPage() {
   const userSlotWins = slotComparisons?.filter((s) => s.winner === "user").length ?? 0;
   const aiSlotWins = slotComparisons?.filter((s) => s.winner === "ai").length ?? 0;
 
-  const spinSlotLabel = spin ? `Slot ${spin.slotIndex + 1}` : undefined;
-  const spinFixed = spin
-    ? {
-        team: spin.kind === "decade" ? slots[spin.slotIndex]?.team : null,
-        decade: spin.kind === "team" ? slots[spin.slotIndex]?.decade : null,
-      }
-    : {};
-
   return (
     <div className="relative flex min-h-dvh flex-col bg-background">
       <AppNav showBack subtitle="All-Time NBA" />
 
-      <EraSpinModal
-        open={!!spin}
+      <EraComboSpinModal
+        open={spinning}
         spinKey={spinKey}
-        kind={spin?.kind ?? "team"}
-        slotLabel={spinSlotLabel}
-        mode={spin?.mode ?? "spin"}
-        fixed={spinFixed}
         excludePlayerIds={usedPlayerIds}
         onOpenChange={(next) => {
-          if (!next) setSpin(null);
+          if (!next) setSpinning(false);
         }}
         onComplete={handleSpinComplete}
       />
@@ -502,8 +476,8 @@ function LineupBuilderPage() {
             <div className="mt-3 flex items-start gap-2">
               <Dices className="mt-0.5 h-4 w-4 shrink-0 text-cyan" />
               <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                For each slot, spin a Team and a Decade independently. Then pick a legend who played
-                for that team in that era. One reroll per field. Then the AI counters.
+                Spin a Team &amp; Decade together, pick a legend who played there, then drop them into any
+                position they played. Swap a player to another eligible spot any time before generating the AI.
               </p>
             </div>
           </div>
@@ -524,200 +498,209 @@ function LineupBuilderPage() {
               </span>
             </div>
 
-            {pickingSlot && pickingSlot.team && pickingSlot.decade && (
-              <div ref={dropdownRef} className="mb-4 rounded-md border border-cyan/30 bg-background/50 p-3 sm:p-4">
+            {/* Era spin control */}
+            {!lineupComplete && !currentEra && (
+              <button
+                onClick={startSpin}
+                disabled={spinning}
+                className="mb-4 flex w-full items-center justify-center gap-2 rounded-md bg-cyan py-3 text-sm font-bold uppercase tracking-widest text-primary-foreground transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40"
+              >
+                <Dices className="h-4 w-4" />
+                Spin Team &amp; Decade
+              </button>
+            )}
+
+            {/* Era + player picker */}
+            {currentEra && (
+              <div ref={pickerRef} className="mb-4 rounded-md border border-cyan/30 bg-background/50 p-3 sm:p-4">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-cyan/40 bg-cyan/10 px-3 py-1 text-xs font-bold text-cyan">
-                    {pickingSlot.position} · {POSITION_NAMES[pickingSlot.position]}
-                  </span>
                   <span className="rounded-full bg-cyan px-3 py-1 text-xs font-bold text-primary-foreground">
-                    {pickingSlot.team}
+                    {currentEra.team}
                   </span>
                   <span className="rounded-full bg-cyan/15 px-3 py-1 text-xs font-bold text-cyan">
-                    {pickingSlot.decade}
+                    {currentEra.decade}
                   </span>
-                  <span className="ml-auto text-xs font-semibold text-muted-foreground">
-                    Slot {pickingSlotIdx + 1} of 5
-                  </span>
-                </div>
-
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <div className="relative flex-1 min-w-[140px]">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="text"
-                      placeholder="Search..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      disabled={!!spin}
-                      className="w-full rounded-lg border border-border bg-background pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-cyan"
-                    />
-                  </div>
-                  <select
-                    value={sortKey}
-                    onChange={(e) => setSortKey(e.target.value as SortKey)}
-                    className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-bold text-foreground outline-none focus:border-cyan"
+                  <button
+                    onClick={rerollEra}
+                    className="ml-auto flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px] font-bold text-foreground hover:bg-cyan/15 hover:text-cyan"
+                    title="Reroll era"
                   >
-                    {SORT_OPTIONS.map((o) => (
-                      <option key={o.key} value={o.key}>{o.label}</option>
-                    ))}
-                  </select>
+                    <RefreshCw className="h-3 w-3" /> Reroll
+                  </button>
                 </div>
 
-                <p className="mb-2 text-xs text-muted-foreground">
-                  {available.length} eligible {pickingSlot.position} player{available.length === 1 ? "" : "s"} available
-                </p>
-
-                <div className="max-h-[420px] overflow-y-auto rounded-lg border border-border bg-background/40 divide-y divide-border">
-                  {available.length === 0 ? (
-                    <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                      No players match these filters
-                    </div>
-                  ) : (
-                    available.map((p) => (
+                {pendingPlayer ? (
+                  <div className="rounded-md border border-cyan/40 bg-cyan/5 p-3">
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-cyan">
+                      Pick a position for {pendingPlayer.player.name}
+                    </p>
+                    <p className="mb-3 text-[11px] text-muted-foreground">
+                      Listed as <span className="font-bold text-foreground">{pendingPlayer.player.pos}</span> — choose which spot they fill.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {pendingPlayer.positions.map((pos) => (
+                        <button
+                          key={pos}
+                          onClick={() => assignPlayerToPosition(
+                            pendingPlayer.player,
+                            { team: pendingPlayer.team, decade: pendingPlayer.decade },
+                            pos
+                          )}
+                          className="rounded-md border border-cyan/40 bg-background px-3 py-1.5 text-xs font-bold text-cyan hover:bg-cyan hover:text-primary-foreground"
+                        >
+                          {pos} · {POSITION_NAMES[pos]}
+                        </button>
+                      ))}
                       <button
-                        key={p.id}
-                        onClick={() => pickPlayerForSlot(pickingSlotIdx, p)}
-                        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-cyan/10"
+                        onClick={() => setPendingPlayer(null)}
+                        className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-bold text-muted-foreground hover:text-foreground"
                       >
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-foreground">{p.name}</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {p.pos} · {pickingSlot.team!.split(" ").pop()} · {pickingSlot.decade}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2 text-center font-mono text-[11px]">
-                          <Stat label="PPG" value={p.ppg} hl={sortKey === "ppg"} />
-                          <Stat label="RPG" value={p.rpg} hl={sortKey === "rpg"} />
-                          <Stat label="APG" value={p.apg} hl={sortKey === "apg"} />
-                          <Stat label="SPG" value={p.spg} hl={sortKey === "spg"} />
-                          <Stat label="BPG" value={p.bpg} hl={sortKey === "bpg"} />
-                          <Stat label="IMP" value={p.impact} hl={sortKey === "impact"} />
-                        </div>
+                        Cancel
                       </button>
-                    ))
-                  )}
-                </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <div className="relative flex-1 min-w-[140px]">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          type="text"
+                          placeholder="Search..."
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          className="w-full rounded-lg border border-border bg-background pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-cyan"
+                        />
+                      </div>
+                      <select
+                        value={sortKey}
+                        onChange={(e) => setSortKey(e.target.value as SortKey)}
+                        className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-bold text-foreground outline-none focus:border-cyan"
+                      >
+                        {SORT_OPTIONS.map((o) => (
+                          <option key={o.key} value={o.key}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      {available.length} eligible player{available.length === 1 ? "" : "s"} for your open spots
+                      {emptyPositions.length < 5 && (
+                        <span> · open: {emptyPositions.join(" · ")}</span>
+                      )}
+                    </p>
+
+                    <div className="max-h-[420px] overflow-y-auto rounded-lg border border-border bg-background/40 divide-y divide-border">
+                      {available.length === 0 ? (
+                        <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                          No players from this era fit your open positions. Try a reroll.
+                        </div>
+                      ) : (
+                        available.map((p) => {
+                          const eligibles = eligiblePositions(p.pos).filter((c) => !slots[c]);
+                          return (
+                            <button
+                              key={p.id}
+                              onClick={() => handlePlayerClick(p)}
+                              className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-cyan/10"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-semibold text-foreground">{p.name}</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {p.pos} · plays {eligibles.join("/")}
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2 text-center font-mono text-[11px]">
+                                <Stat label="PPG" value={p.ppg} hl={sortKey === "ppg"} />
+                                <Stat label="RPG" value={p.rpg} hl={sortKey === "rpg"} />
+                                <Stat label="APG" value={p.apg} hl={sortKey === "apg"} />
+                                <Stat label="SPG" value={p.spg} hl={sortKey === "spg"} />
+                                <Stat label="BPG" value={p.bpg} hl={sortKey === "bpg"} />
+                                <Stat label="IMP" value={p.impact} hl={sortKey === "impact"} />
+                              </div>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
             {/* Slot cards */}
             <div className="space-y-2">
-              {slots.map((slot, i) => {
-                const filled = isFilled(slot);
+              {COURT_POSITIONS.map((pos, i) => {
+                const player = slots[pos];
+                const filled = !!player;
+                const moveTargets = filled
+                  ? eligiblePositions(player!.rawPosition).filter((c) => c !== pos && !slots[c])
+                  : [];
+                const isMoving = moveFrom === pos;
                 return (
                   <div
-                    key={i}
+                    key={pos}
                     className={`animate-fade-in rounded-md border-l-4 px-3 py-3 sm:px-4 ${
-                      filled
-                        ? "border-cyan bg-cyan/5"
-                        : slot.team || slot.decade
-                        ? "border-cyan/20 bg-cyan/5"
-                        : "border-dashed border-border bg-background/40"
+                      filled ? "border-cyan bg-cyan/5" : "border-dashed border-border bg-background/40"
                     }`}
                     style={{ animationDelay: `${i * 60}ms` }}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
-                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${filled || slot.team || slot.decade ? "bg-cyan/15 text-cyan" : "bg-muted text-muted-foreground"}`}>
-                          {slot.position}
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${filled ? "bg-cyan/15 text-cyan" : "bg-muted text-muted-foreground"}`}>
+                          {pos}
                         </span>
                         <div className="min-w-0">
                           {filled ? (
                             <>
-                              <p className="truncate text-sm font-semibold text-foreground">{slot.player!.name}</p>
+                              <p className="truncate text-sm font-semibold text-foreground">{player!.name}</p>
                               <p className="truncate text-xs text-muted-foreground">
-                                {POSITION_NAMES[slot.position]} · {slot.team} · {slot.decade}
+                                {POSITION_NAMES[pos]} · {player!.team} · {player!.decade} · listed {player!.rawPosition}
                               </p>
                             </>
                           ) : (
                             <p className="text-sm font-semibold text-foreground">
-                              <span className="text-cyan">{POSITION_NAMES[slot.position]}</span>
-                              {slot.team && slot.decade ? " · Pick a player above" : " · Spin team & decade"}
+                              <span className="text-cyan">{POSITION_NAMES[pos]}</span>
+                              <span className="text-muted-foreground"> · empty</span>
                             </p>
                           )}
                         </div>
                       </div>
                       {filled && (
-                        <button
-                          onClick={() => clearSlot(i)}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                          aria-label={`Remove ${slot.player!.name}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {moveTargets.length > 0 && (
+                            <button
+                              onClick={() => setMoveFrom(isMoving ? null : pos)}
+                              className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-bold text-muted-foreground transition-colors hover:bg-cyan/10 hover:text-cyan"
+                              title="Move to another position"
+                            >
+                              <ArrowLeftRight className="h-3.5 w-3.5" />
+                              Move
+                            </button>
+                          )}
+                          <button
+                            onClick={() => clearSlot(pos)}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            aria-label={`Remove ${player!.name}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
                       )}
                     </div>
 
-                    {/* Team + Decade controls row */}
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      {/* Team */}
-                      <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background/60 px-2.5 py-1.5">
-                        <div className="min-w-0">
-                          <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Team</p>
-                          <p className="truncate text-xs font-bold text-foreground">{slot.team ?? "—"}</p>
-                        </div>
-                        {!slot.team ? (
+                    {filled && isMoving && moveTargets.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2 rounded-md border border-cyan/30 bg-background/60 p-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Move to</span>
+                        {moveTargets.map((tp) => (
                           <button
-                            onClick={() => startSpin(i, "team", "spin")}
-                            disabled={!!spin}
-                            className="rounded-md bg-cyan/15 px-2 py-1 text-[10px] font-bold text-cyan hover:bg-cyan/25 disabled:opacity-40"
+                            key={tp}
+                            onClick={() => movePlayer(pos, tp)}
+                            className="rounded-md border border-cyan/40 bg-cyan/10 px-2 py-1 text-[11px] font-bold text-cyan hover:bg-cyan hover:text-primary-foreground"
                           >
-                            Spin
+                            {tp}
                           </button>
-                        ) : !slot.teamRerolled ? (
-                          <button
-                            onClick={() => startSpin(i, "team", "reroll")}
-                            disabled={!!spin}
-                            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-cyan/10 hover:text-cyan disabled:opacity-40"
-                            title="Reroll team (1×)"
-                            aria-label="Reroll team"
-                          >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                          </button>
-                        ) : (
-                          <span className="text-[9px] font-semibold uppercase text-muted-foreground">Locked</span>
-                        )}
-                      </div>
-
-                      {/* Decade */}
-                      <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background/60 px-2.5 py-1.5">
-                        <div className="min-w-0">
-                          <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Decade</p>
-                          <p className="truncate text-xs font-bold text-foreground">{slot.decade ?? "—"}</p>
-                        </div>
-                        {!slot.decade ? (
-                          <button
-                            onClick={() => startSpin(i, "decade", "spin")}
-                            disabled={!!spin}
-                            className="rounded-md bg-cyan/15 px-2 py-1 text-[10px] font-bold text-cyan hover:bg-cyan/25 disabled:opacity-40"
-                          >
-                            Spin
-                          </button>
-                        ) : !slot.decadeRerolled ? (
-                          <button
-                            onClick={() => startSpin(i, "decade", "reroll")}
-                            disabled={!!spin}
-                            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-cyan/10 hover:text-cyan disabled:opacity-40"
-                            title="Reroll decade (1×)"
-                            aria-label="Reroll decade"
-                          >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                          </button>
-                        ) : (
-                          <span className="text-[9px] font-semibold uppercase text-muted-foreground">Locked</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {filled && (
-                      <div className="mt-2 flex justify-end">
-                        <button
-                          onClick={() => clearPlayer(i)}
-                          className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-cyan"
-                        >
-                          Change player
-                        </button>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -748,7 +731,7 @@ function LineupBuilderPage() {
                 if (generating) {
                   return (
                     <div key={i} className="flex items-center gap-3 rounded-xl border border-border bg-background/40 px-4 py-3 animate-pulse">
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">{i + 1}</span>
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">{COURT_POSITIONS[i]}</span>
                       <div className="h-3 w-32 rounded bg-muted" />
                     </div>
                   );
@@ -756,7 +739,7 @@ function LineupBuilderPage() {
                 if (!player) {
                   return (
                     <div key={i} className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-background/40 px-4 py-3">
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">{i + 1}</span>
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">{COURT_POSITIONS[i]}</span>
                       <p className="text-sm text-muted-foreground">Awaiting AI</p>
                     </div>
                   );
@@ -768,7 +751,7 @@ function LineupBuilderPage() {
                     style={{ animationDelay: `${i * 75}ms` }}
                   >
                     <div className="flex items-center gap-3">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan/10 text-xs font-bold text-cyan">{i + 1}</span>
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan/10 text-xs font-bold text-cyan">{COURT_POSITIONS[i]}</span>
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-foreground">{player.name}</p>
                         <p className="text-xs text-muted-foreground">
@@ -805,7 +788,7 @@ function LineupBuilderPage() {
         <div className="mt-6 sm:mt-8">
           <button
             onClick={() => { void generateAI(); }}
-            disabled={!lineupComplete || generating || !!spin}
+            disabled={!lineupComplete || generating || spinning}
             className="w-full rounded-md bg-cyan py-3.5 text-sm font-bold uppercase tracking-widest text-primary-foreground transition-all duration-200 hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 sm:py-4 sm:text-base"
           >
             {generating ? (
@@ -822,7 +805,7 @@ function LineupBuilderPage() {
           </button>
           {!lineupComplete && (
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              Spin team + decade and pick a player in all 5 slots to enable AI lineup
+              Fill all 5 positions to enable AI lineup
             </p>
           )}
           {aiError && (
@@ -859,7 +842,7 @@ function LineupBuilderPage() {
                   style={{ animationDelay: `${i * 60}ms` }}
                 >
                   <div className="mb-3 flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Slot {slot.slot}</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{slot.position} · {POSITION_NAMES[slot.position]}</span>
                     {slot.winner !== "tie" ? (
                       <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${slot.winner === "user" ? "bg-cyan/15 text-cyan" : "bg-muted text-muted-foreground"}`}>
                         {slot.winner === "user" ? "You win" : "AI wins"}
