@@ -24,58 +24,39 @@ const InputSchema = z.object({
 });
 
 async function callAIGateway(systemPrompt: string, userPrompt: string): Promise<string> {
-  // NVIDIA NIM integration (supports custom endpoint via NVIM_ENDPOINT)
+  // NVIDIA NIM integration using the official OpenAI client library
+  // The OpenAI SDK works with any OpenAI‑compatible endpoint, including NVIDIA's.
+  // Ensure the "openai" npm package is installed: `npm i openai` or `bun add openai`.
+
   const key = process.env.NVAPI_KEY;
   if (!key) throw new Error("NVAPI_KEY is not configured");
 
-  // Use a custom NIM endpoint if provided, otherwise fall back to the generic gateway
-  const defaultGateway = "https://integrate.api.nvidia.com/v1/chat/completions";
-  const invokeUrl = process.env.NVIM_ENDPOINT?.trim() || defaultGateway;
-  const stream = false; // streaming disabled for now
+  // Base URL for NVIDIA's OpenAI‑compatible API
+  const baseUrl = "https://integrate.api.nvidia.com/v1";
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${key}`,
-    Accept: stream ? "text/event-stream" : "application/json",
-  };
+  // Dynamically import the OpenAI client to avoid bundling it on the client side.
+  const { OpenAI } = await import("openai");
+  const client = new OpenAI({
+    baseURL: baseUrl,
+    apiKey: key,
+  });
 
-  const payload = {
-    model: "mistralai/mistral-medium-3.5-128b",
-    reasoning_effort: "high",
+  const response = await client.chat.completions.create({
+    model: "minimaxai/minimax-m2.7", // or your preferred NIM model
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    max_tokens: 16384,
-    temperature: 0.70,
+    temperature: 0.7,
     top_p: 1.0,
-    stream: stream,
-    response_format: { type: "json_object" }, // request JSON output
-  };
-
-  const res = await fetch(invokeUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload),
+    max_tokens: 16384,
+    stream: false,
+    response_format: { type: "json_object" },
   });
 
-  // Error handling – messages now reference NVIDIA NIM
-  if (res.status === 429) {
-    throw new Error("Rate limit reached. Please try again later.");
-  }
-  if (res.status === 402) {
-    throw new Error("NVIDIA NIM credits exhausted. Please add credits to your NVIDIA account.");
-  }
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`NVIDIA NIM error (${res.status}): ${text.slice(0, 200)}`);
-  }
-
-  const json = (await res.json()) as {
-    choices?: { message?: { content?: string } }[];
-  };
-  const content = json.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Empty response from NVIDIA NIM");
+  // The OpenAI SDK returns a structured object; we pull the content out.
+  const content = response.choices?.[0]?.message?.content;
+  if (!content) throw new Error("Empty response from NVIDIA NIM (OpenAI SDK)");
   return content;
 }
 
