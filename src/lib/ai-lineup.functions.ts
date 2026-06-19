@@ -24,8 +24,8 @@ const InputSchema = z.object({
 });
 
 async function callAIGateway(systemPrompt: string, userPrompt: string): Promise<string> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("LOVABLE_API_KEY is not configured");
+  const key = process.env.NVAPI_KEY;
+  if (!key) throw new Error("NVAPI_KEY is not configured");
 
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
