@@ -32,7 +32,7 @@ async function callAIGateway(systemPrompt: string, userPrompt: string): Promise<
   if (!key) throw new Error("NVAPI_KEY is not configured");
 
   // Base URL for NVIDIA's OpenAI‑compatible API
-  const baseUrl = "https://integrate.api.nvidia.com/v1";
+  const baseUrl = process.env.NVIM_ENDPOINT?.trim() || "https://integrate.api.nvidia.com/v1";
 
   // Dynamically import the OpenAI client to avoid bundling it on the client side.
   const { OpenAI } = await import("openai");
