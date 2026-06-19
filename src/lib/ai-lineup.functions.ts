@@ -24,41 +24,55 @@ const InputSchema = z.object({
 });
 
 async function callAIGateway(systemPrompt: string, userPrompt: string): Promise<string> {
+  // NVIDIA API integration
   const key = process.env.NVAPI_KEY;
   if (!key) throw new Error("NVAPI_KEY is not configured");
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const invokeUrl = "https://integrate.api.nvidia.com/v1/chat/completions";
+  const stream = false; // streaming disabled for now
+
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${key}`,
+    Accept: stream ? "text/event-stream" : "application/json",
+  };
+
+  const payload = {
+    model: "mistralai/mistral-medium-3.5-128b",
+    reasoning_effort: "high",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    max_tokens: 16384,
+    temperature: 0.70,
+    top_p: 1.0,
+    stream: stream,
+    response_format: { type: "json_object" },
+  };
+
+  const res = await fetch(invokeUrl, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      response_format: { type: "json_object" },
-    }),
+    headers,
+    body: JSON.stringify(payload),
   });
 
   if (res.status === 429) {
-    throw new Error("Rate limit reached. Please try again in a moment.");
+    throw new Error("Rate limit reached. Please try again later.");
   }
   if (res.status === 402) {
-    throw new Error("AI credits exhausted. Please add credits in your workspace settings.");
+    throw new Error("NVIDIA AI credits exhausted. Please add credits to your NVIDIA account.");
   }
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`AI gateway error (${res.status}): ${text.slice(0, 200)}`);
+    throw new Error(`NVIDIA API error (${res.status}): ${text.slice(0, 200)}`);
   }
 
   const json = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
   };
   const content = json.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Empty response from AI");
+  if (!content) throw new Error("Empty response from NVIDIA API");
   return content;
 }
 
