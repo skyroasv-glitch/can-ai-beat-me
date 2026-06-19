@@ -24,14 +24,16 @@ const InputSchema = z.object({
 });
 
 async function callAIGateway(systemPrompt: string, userPrompt: string): Promise<string> {
-  // NVIDIA API integration
+  // NVIDIA NIM integration (supports custom endpoint via NVIM_ENDPOINT)
   const key = process.env.NVAPI_KEY;
   if (!key) throw new Error("NVAPI_KEY is not configured");
 
-  const invokeUrl = "https://integrate.api.nvidia.com/v1/chat/completions";
+  // Use a custom NIM endpoint if provided, otherwise fall back to the generic gateway
+  const defaultGateway = "https://integrate.api.nvidia.com/v1/chat/completions";
+  const invokeUrl = process.env.NVIM_ENDPOINT?.trim() || defaultGateway;
   const stream = false; // streaming disabled for now
 
-  const headers = {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${key}`,
     Accept: stream ? "text/event-stream" : "application/json",
@@ -48,7 +50,7 @@ async function callAIGateway(systemPrompt: string, userPrompt: string): Promise<
     temperature: 0.70,
     top_p: 1.0,
     stream: stream,
-    response_format: { type: "json_object" },
+    response_format: { type: "json_object" }, // request JSON output
   };
 
   const res = await fetch(invokeUrl, {
@@ -57,22 +59,23 @@ async function callAIGateway(systemPrompt: string, userPrompt: string): Promise<
     body: JSON.stringify(payload),
   });
 
+  // Error handling – messages now reference NVIDIA NIM
   if (res.status === 429) {
     throw new Error("Rate limit reached. Please try again later.");
   }
   if (res.status === 402) {
-    throw new Error("NVIDIA AI credits exhausted. Please add credits to your NVIDIA account.");
+    throw new Error("NVIDIA NIM credits exhausted. Please add credits to your NVIDIA account.");
   }
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`NVIDIA API error (${res.status}): ${text.slice(0, 200)}`);
+    throw new Error(`NVIDIA NIM error (${res.status}): ${text.slice(0, 200)}`);
   }
 
   const json = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
   };
   const content = json.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Empty response from NVIDIA API");
+  if (!content) throw new Error("Empty response from NVIDIA NIM");
   return content;
 }
 
